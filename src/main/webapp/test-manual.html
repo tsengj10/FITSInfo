@@ -120,16 +120,16 @@
 // test images
 //===============================================================
 
-/*
     viewer.addTiledImage({
         tileSource: "http://localhost:8172/iiif/3/testd$source=direct$colorMap=null/info.json",
         x: 0.0, y: 0.0, width: 1.0
       });
-*/
+/*
     viewer.addTiledImage({
         tileSource: "http://localhost:8172/iiif/3/post_isr_image_LSSTCam_r_57_MC_O_20250511_000866_R22_S00_LSSTCam_runs_quickLook_3$source=direct$colorMap=null/info.json",
         x: 0.0, y: 0.0, width: 0.5
       });
+*/
 /*
     viewer.addTiledImage({
         tileSource: "http://localhost:8172/iiif/3/post_isr_image_LSSTCam_r_57_MC_O_20250511_000866_R22_S01_LSSTCam_runs_quickLook_3$source=direct$colorMap=null/info.json",
@@ -248,23 +248,26 @@
       } else {
         // make an interim stretch
         lastHist = acchist[level].trim(1);
-        let minv = parseInt(document.getElementById("minv").value);
-        let maxv = parseInt(document.getElementById("maxv").value);
-        lastStretch = lastHist.makeStretcher(cmap, minv, maxv);
-        lastRange = lastHist.getRange(1);
+        // test whether it's empty (which might happen if image doesn't exist
+        if (lastHist.valid()) {
+          let minv = parseInt(document.getElementById("minv").value);
+          let maxv = parseInt(document.getElementById("maxv").value);
+          lastStretch = lastHist.makeStretcher(cmap, minv, maxv);
+          lastRange = lastHist.getRange(1);
 
-        ColorStretch.filter.apply(pxl, ColorStretch.decoders.raw, lastStretch);
-        context.putImageData(imgData, 0, 0);
+          ColorStretch.filter.apply(pxl, ColorStretch.decoders.raw, lastStretch);
+          context.putImageData(imgData, 0, 0);
 
-        pixrangeEl.innerHTML = 'Pixel range: (' +
-            lastRange[0] + ', ' +
-            lastRange[1] + ')';
+          pixrangeEl.innerHTML = 'Pixel range: (' +
+              lastRange[0] + ', ' +
+              lastRange[1] + ')';
         
-        //drawColorbarHistogram(lastHist, lastStretch);
-        let cbminv = parseInt(document.getElementById("cbminv").value);
-        let cbmaxv = parseInt(document.getElementById("cbmaxv").value);
-        drawColorbarHistogram(lastHist.trim(cbminv, cbmaxv), lastStretch);
-        drawD3Histogram(lastHist);
+          //drawColorbarHistogram(lastHist, lastStretch);
+          let cbminv = parseInt(document.getElementById("cbminv").value);
+          let cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+          drawColorbarHistogram(lastHist.trim(cbminv, cbmaxv), lastStretch);
+          drawD3Histogram(lastHist);
+        }
       }
 
       callback();
