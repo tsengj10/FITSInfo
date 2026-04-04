@@ -243,6 +243,9 @@ var ColorStretch = {};
 
     // number of bins in histogram object
     nbins: function() { return this.data.length; },
+
+    // test whether histogram is usable
+    valid: function() { return this.data.length > 0; },
  
     // maximum bin contents
     // (assumes bin contents are non-zero)
@@ -427,11 +430,13 @@ var ColorStretch = {};
     //     if xstop < 0, it will be relative to end.
     //-------------------------------------------------------------
     trim: function(xstart=0, xstop=-1) {
+      let x0 = (xstart == null) ? 0 : xstart;
+      let x1 = (xstop == null) ? -1 : xstop;
       const d = this.dx();
-      let ilo = ((xstart - this.xlo) / d) | 0;
+      let ilo = ((x0 - this.xlo) / d) | 0;
       if (ilo < 0) ilo = 0;
-      let ihi = ((xstop - this.xlo) / d) | 0;
-      if (xstop < 0) ihi = ((this.xhi + xstop - this.xlo) / d) | 0;
+      let ihi = ((x1 - this.xlo) / d) | 0;
+      if (xstop < 0) ihi = ((this.xhi + x1 - this.xlo) / d) | 0;
       while (this.data[ilo] == 0 && ilo < this.data.length) ilo += 1;
       if (ilo == this.data.length || ihi < ilo) {
         // empty histogram
@@ -446,13 +451,18 @@ var ColorStretch = {};
 
     //-------------------------------------------------------------
     // return a stretcher function derived from the cdf.
+    // The stretcher function maps 0..1 to an RGBA quadruplet.
     //
     // This should work for dx > 1, but usually the stretcher
     // will operate on histograms with dx=1.  Rebinning is
     // usually for display purposes, not for actual color-mapping.
+    //
+    // By default, the stretcher will use the range 0 up to
+    // the maximum pixel value.  Optionally, one can specify
+    // minimum and maximum pixel values.
     //-------------------------------------------------------------
-    makeStretcher: function(colormap) {
-      const sh = this.trim(); // trim zero bins off sides
+    makeStretcher: function(colormap, xstart=0, xstop=-1) {
+      const sh = this.trim(xstart, xstop); // trim zero bins off sides
       let sum = 0;
       let a = new Array(sh.nbins());
       for (let i = 0; i < sh.nbins(); i++) {
@@ -464,7 +474,7 @@ var ColorStretch = {};
       this.gm = new Array(sh.nbins());
       this.bm = new Array(sh.nbins());
       for (let i = 0; i < sh.nbins(); i++) {
-        v = colormap(a[i] / range);
+        let v = colormap(a[i] / range);
         this.rm[i] = v[0];
         this.gm[i] = v[1];
         this.bm[i] = v[2];

@@ -15,13 +15,13 @@
 <div id="container">
 <div style="padding: 0 1.5em; height: 600px;">
     <div class="info" style="float: left; width: 300px;">
-      <div class="menus" style="float: left; width: 300px;">
+      Stretch parameters:<br>
       <label for="minv">Min:</label>
-      <input type="number" id="minv" name="minv">
+      <input type="number" id="minv" name="minv" value=0>
       <br>
       <label for="maxv">Max:</label>
-      <input type="number" id="maxv" name="maxv">
-      <br>
+      <input type="number" id="maxv" name="maxv" value=-1>
+      <div class="menus" style="float: left; width: 300px;">
       <select name="cmap" id="cmap">
         <option value="gray">Gray</option>
         <option value="standard">Standard</option>
@@ -34,9 +34,10 @@
         <div class="position"></div>
         <div class="zoom" style="margin-top: 3em;"></div>
         <div class="rgb" style="margin-top: 3em;"></div>
-        D3/Plot histogram:
+        <div class="pixrange" style="margin-top: 3em;"></div>
+        D3/Plot histogram (full range):
         <div id="plothist"></div>
-        <div class="colorstats" style="margin-top: 3em;"></div>
+      <br>
         <div class="colorquery" style="margin-top: 3em;"></div>
     </div>
     <div id="openseadragon1" style="float: right; width: 380px; height: 500px; background: black;"></div>
@@ -45,6 +46,13 @@
 <br>
 
 <p> Color histogram:<br>
+<div class="cbcontrol" style="float: left; width: 300px;">
+  <label for="cbminv">Min:</label>
+  <input type="number" id="cbminv" name="cbminv" value=0>
+  <br>
+  <label for="cbmaxv">Max:</label>
+  <input type="number" id="cbmaxv" name="cbmaxv" value=-1>
+</div>
 <canvas id="colorbar" width="700" height="250" style="border:1px solid grey"></canvas>
 </p>
 
@@ -61,10 +69,11 @@
     var positionEl = document.querySelectorAll('.info .position')[0];
     var zoomEl = document.querySelectorAll('.info .zoom')[0];
     var rgbEl = document.querySelectorAll('.info .rgb')[0];
+    var pixrangeEl = document.querySelectorAll('.info .pixrange')[0];
 
     var updateZoom = function() {
         var zoom = viewer.viewport.getZoom(true);
-        zoomEl.innerHTML = 'Zoom:<br>' + (Math.round(zoom * 100) / 100);
+        zoomEl.innerHTML = 'Zoom: ' + (Math.round(zoom * 100) / 100);
     }
 
     var openHandler = function() {
@@ -79,13 +88,13 @@
               var rect = img.getBounds(true); // rect in viewport coordinates
               if (rect.containsPoint(viewportPoint)) {
                 var imagePoint = img.viewportToImageCoordinates(viewportPoint);
-                positionEl.innerHTML = 'Web:<br>' + webPoint.toString() + 
+                positionEl.innerHTML = 'Web: ' + webPoint.toString() + 
                     '<br><br>Viewport:<br>' + viewportPoint.toString() +
                     '<br><br>Item:<br>' + i +
                     '<br><br>Image:<br>' + imagePoint.toString();
                 break;
               }
-              positionEl.innerHTML = 'Web:<br>' + webPoint.toString() + 
+              positionEl.innerHTML = 'Web: ' + webPoint.toString() + 
                   '<br><br>Viewport:<br>' + viewportPoint.toString();
             }
             updateZoom();     
@@ -167,6 +176,7 @@
 
     // special colorbar histogram from colorstretch.js
     var drawColorbarHistogram = function(chist, stretcher) {
+      if (!chist.valid()) return;
       const renderer = new ColorStretch.Renderer(chist, 700, 250, 0.1, 0.25);
       renderer.logy = true;
       const colorbar = document.getElementById("colorbar");
@@ -238,18 +248,22 @@
       } else {
         // make an interim stretch
         lastHist = acchist[level].trim(1);
-        lastStretch = lastHist.makeStretcher(cmap);
+        let minv = parseInt(document.getElementById("minv").value);
+        let maxv = parseInt(document.getElementById("maxv").value);
+        lastStretch = lastHist.makeStretcher(cmap, minv, maxv);
         lastRange = lastHist.getRange(1);
 
         ColorStretch.filter.apply(pxl, ColorStretch.decoders.raw, lastStretch);
         context.putImageData(imgData, 0, 0);
 
-        let minv = document.getElementById("minv");
-        minv.value = lastRange[0];
-        let maxv = document.getElementById("maxv");
-        maxv.value = lastRange[1];
+        pixrangeEl.innerHTML = 'Pixel range: (' +
+            lastRange[0] + ', ' +
+            lastRange[1] + ')';
         
-        drawColorbarHistogram(lastHist, lastStretch);
+        //drawColorbarHistogram(lastHist, lastStretch);
+        let cbminv = parseInt(document.getElementById("cbminv").value);
+        let cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+        drawColorbarHistogram(lastHist.trim(cbminv, cbmaxv), lastStretch);
         drawD3Histogram(lastHist);
       }
 
@@ -284,8 +298,12 @@
       else if (v == 'standard') cmap = ColorStretch.colormaps.standard;
       else cmap = ColorStretch.colormaps.gray;
 
-      lastStretch = lastHist.makeStretcher(cmap);
-      drawColorbarHistogram(lastHist, lastStretch);
+      let minv = parsInt(document.getElementById("minv").value);
+      let maxv = parsInt(document.getElementById("maxv").value);
+      lastStretch = lastHist.makeStretcher(cmap, minv, maxv);
+      let cbminv = parseInt(document.getElementById("cbminv").value);
+      let cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+      drawColorbarHistogram(lastHist.trim(cbminv, cbmaxv), lastStretch);
       drawD3Histogram(lastHist);
 
       // reset accumulators
@@ -299,6 +317,17 @@
         loadMode: 'sync'
       });
     });
+
+    // redraw color histogram if change min/max parameters
+    var redrawColorbarHistogram = function() {
+      let cbminv = parseInt(document.getElementById("cbminv").value);
+      let cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+      drawColorbarHistogram(lastHist.trim(cbminv, cbmaxv), lastStretch);
+    }
+    var cbMinEl = document.getElementById('cbminv');
+    var cbMaxEl = document.getElementById('cbmaxv');
+    cbMinEl.addEventListener('input', redrawColorbarHistogram);
+    cbMaxEl.addEventListener('input', redrawColorbarHistogram);
 
     // button which causes re-evaluation of stretch,
     // based on previously accumulated histograms
@@ -319,15 +348,18 @@
       if (redrawlevel >= 0) {
         // create stretch function with this level
         lastHist = acchist[redrawlevel].trim(1);
-        lastStretch = lastHist.makeStretcher(cmap);
+        let minv = parseInt(document.getElementById("minv").value);
+        let maxv = parseInt(document.getElementById("maxv").value);
+        lastStretch = lastHist.makeStretcher(cmap, minv, maxv);
         lastRange = lastHist.getRange(1);
-        let minv = document.getElementById("minv");
-        minv.value = lastRange[0];
-        let maxv = document.getElementById("maxv");
-        maxv.value = lastRange[1];
+        pixrangeEl.innerHTML = 'Pixel range: (' +
+            lastRange[0] + ', ' +
+            lastRange[1] + ')';
 
         // redraw the histograms
-        drawColorbarHistogram(lastHist, lastStretch);
+        let cbminv = parseInt(document.getElementById("cbminv").value);
+        let cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+        drawColorbarHistogram(lastHist.trim(cbminv, cbmaxv), lastStretch);
         drawD3Histogram(lastHist);
 
         // reset drawing
