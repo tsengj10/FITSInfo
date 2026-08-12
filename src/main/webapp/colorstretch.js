@@ -826,6 +826,35 @@ var ColorStretch = {};
   };
 
   //---------------------------------------------------------------
+  // apply the decoder and stretcher to a rectangle of pixels
+  //   pxl = pixel array, as from context.getImageData(...).data
+  //   pwidth = width in pixels of pxl
+  //   xstart, ystart = coordinates of top left corner
+  //   xwidth, ywidth = width in pixels of rectangle
+  //   decoder = function rgba -> scalar pixel value
+  //   stretcher = function scalar pixel value -> rgba
+  //---------------------------------------------------------------
+  $.filter.applyToRect = function(pxl, pwidth,
+                                  xstart, ystart, xwidth, ywidth,
+                                  decoder, stretcher) {
+    const rw = 4 * pwidth;
+    let p = ystart * rw + xstart * 4;
+    for (let iy = ystart; iy < ystart + ywidth; iy++) {
+      let i = p;
+      for (let ix = 0; ix < xwidth; ix++) {
+        let v = decoder(pxl[i], pxl[i+1], pxl[i+2], pxl[i+3]);
+        let c = stretcher(v);
+        pxl[i] = c[0];
+        pxl[i+1] = c[1];
+        pxl[i+2] = c[2];
+        pxl[i+3] = c[3];
+        i += 4;
+      }
+      p += rw;
+    }
+  };
+
+  //---------------------------------------------------------------
   // fill a histogram based on given pixels
   //   hist = existing Histogram
   //   pxl = pixel array, as from context.getImageData(...).data
@@ -835,6 +864,31 @@ var ColorStretch = {};
     for (let i = 0; i < pxl.length; i += 4) {
       let v = decoder(pxl[i], pxl[i+1], pxl[i+2], pxl[i+3]);
       hist.fill(v);
+    }
+    return hist;
+  };
+
+  //---------------------------------------------------------------
+  // fill a histogram based on pixels in a given rectangle
+  //   hist = existing Histogram
+  //   pxl = pixel array, as from context.getImageData(...).data
+  //   pwidth = width in pixels of pxl
+  //   xstart, ystart = coordinates of top left corner
+  //   xwidth, ywidth = width in pixels of rectangle
+  //   decoder = function rgba -> scalar pixel value
+  //---------------------------------------------------------------
+  $.filter.fillFromRect = function(hist, pxl, pwidth,
+                                   xstart, ystart, xwidth, ywidth, decoder) {
+    const rw = 4 * pwidth;
+    let p = ystart * rw + xstart * 4;
+    for (let iy = ystart; iy < ystart + ywidth; iy++) {
+      let i = p;
+      for (let ix = 0; ix < xwidth; ix++) {
+        let v = decoder(pxl[i], pxl[i+1], pxl[i+2], pxl[i+3]);
+        hist.fill(v);
+        i += 4;
+      }
+      p += rw;
     }
     return hist;
   };

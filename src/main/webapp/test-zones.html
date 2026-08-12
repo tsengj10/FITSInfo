@@ -1,0 +1,545 @@
+<html>
+<head>
+<title>Test Multiple Restretch</title>
+<link rel='stylesheet' type='text/css' media='screen'
+      href='https://openseadragon.github.io/css/style.css' />
+<script src="openseadragon/openseadragon.js"></script>
+<script src="d3.min.js"></script>
+<script src="plot.min.js"></script>
+<script src="openseadragon-filtering-lsst.js"></script>
+<script src="colorstretch.js"></script>
+</head>
+<body>
+<h1>Test multiple restretch</h1>
+
+<p>
+<div id="container">
+<div style="padding: 0 1.5em; height: 600px;">
+    <div class="info" style="float: left; width: 300px;">
+      Stretch parameters:<br>
+      <label for="minv">Min:</label>
+      <input type="number" id="minv" name="minv" value=0>
+      <br>
+      <label for="maxv">Max:</label>
+      <input type="number" id="maxv" name="maxv" value=-1>
+      <div class="menus" style="float: left; width: 300px;">
+      <select name="cmap" id="cmap">
+        <option value="gray">Gray</option>
+        <option value="standard">Standard</option>
+        <option value="saoA" selected="selected">SAO A</option>
+        <option value="saoB">SAO B</option>
+        <option value="saoBB">SAO BB</option>
+      </select>
+      <button type='button' id='restretch'>Restretch</button>
+      </div>
+        <div class="position"></div>
+        <div class="zoom" style="margin-top: 3em;"></div>
+        <div class="rgb" style="margin-top: 3em;"></div>
+        <div class="pixrange" style="margin-top: 3em;"></div>
+        D3/Plot histogram (full range):
+        <div id="plothist"></div>
+      <br>
+        <div class="colorquery" style="margin-top: 3em;"></div>
+    </div>
+    <div id="openseadragon1" style="float: right; width: 380px; height: 500px; background: black;"></div>
+</div>
+</p>
+<br>
+
+<p> Color histogram:<br>
+<div class="cbcontrol" style="float: left; width: 300px;">
+  <label for="cbx">Zone x:</label>
+  <input type="number" id="cbx" name="cbx" value=0>
+  <label for="cby">y:</label>
+  <input type="number" id="cby" name="cby" value=0>
+  <br>
+  <label for="cbminv">Min:</label>
+  <input type="number" id="cbminv" name="cbminv" value=0>
+  <br>
+  <label for="cbmaxv">Max:</label>
+  <input type="number" id="cbmaxv" name="cbmaxv" value=-1>
+</div>
+<canvas id="colorbar" width="700" height="250" style="border:1px solid grey"></canvas>
+</p>
+
+    <script>
+
+// NEEDS PATCHED openseadragon-filtering-lsst.js.
+// Otherwise this will get the zoom levels mixed up when
+// making the pixel value histograms needed for auto-scaling.
+
+//===============================================================
+// viewer
+//===============================================================
+
+    var positionEl = document.querySelectorAll('.info .position')[0];
+    var zoomEl = document.querySelectorAll('.info .zoom')[0];
+    var rgbEl = document.querySelectorAll('.info .rgb')[0];
+    var pixrangeEl = document.querySelectorAll('.info .pixrange')[0];
+
+    var cbMinEl = document.getElementById('cbminv');
+    var cbMaxEl = document.getElementById('cbmaxv');
+    var cbxEl = document.getElementById('cbx');
+    var cbyEl = document.getElementById('cby');
+    var restretchButton = document.getElementById('restretch');
+
+    var updateZoom = function() {
+        var zoom = viewer.viewport.getZoom(true);
+        zoomEl.innerHTML = 'Zoom: ' + (Math.round(zoom * 100) / 100);
+    }
+
+    var openHandler = function() {
+      var tracker = new OpenSeadragon.MouseTracker({
+        element: viewer.container,
+        moveHandler: function(event) {
+            var webPoint = event.position;
+            var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+            var vworld = viewer.world;
+            for (var i = 0; i < vworld.getItemCount(); ++i) {
+              var img = vworld.getItemAt(i);
+              var rect = img.getBounds(true); // rect in viewport coordinates
+              if (rect.containsPoint(viewportPoint)) {
+                var imagePoint = img.viewportToImageCoordinates(viewportPoint);
+                positionEl.innerHTML = 'Web: ' + webPoint.toString() + 
+                    '<br><br>Viewport:<br>' + viewportPoint.toString() +
+                    '<br><br>Item:<br>' + i +
+                    '<br><br>Image:<br>' + imagePoint.toString();
+                break;
+              }
+              positionEl.innerHTML = 'Web: ' + webPoint.toString() + 
+                  '<br><br>Viewport:<br>' + viewportPoint.toString();
+            }
+            updateZoom();     
+        }
+      });  
+      tracker.setTracking(true);  
+    };
+
+    var viewer = OpenSeadragon({
+        id: "openseadragon1",
+        prefixUrl: "openseadragon/images/",
+        showNavigator: true,
+        crossOriginPolicy: true,
+        maxZoomPixelRatio: 4,
+        debugMode: false
+      });
+
+    viewer.navigator.setFilterOptions = viewer.setFilterOptions;
+
+    openHandler();
+
+//===============================================================
+// test images
+//===============================================================
+
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/testd$source=direct$colorMap=null/info.json",
+        x: 0.0, y: 0.0, width: 1.0
+      });
+/*
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/post_isr_image_LSSTCam_r_57_MC_O_20250511_000866_R22_S00_LSSTCam_runs_quickLook_3$source=direct$colorMap=null/info.json",
+        x: 0.0, y: 0.0, width: 0.5
+      });
+*/
+/*
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/post_isr_image_LSSTCam_r_57_MC_O_20250511_000866_R22_S01_LSSTCam_runs_quickLook_3$source=direct$colorMap=null/info.json",
+        x: 0.0, y: 0.0, width: 1.0
+      });
+*/
+/*
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/MC_C_20211205_000740_R12_S22$colorMap=null$source=data/info.json",
+        x: 0.0, y: 0.0, width: 0.4
+      });
+*/
+
+//===============================================================
+// navigator:
+// this uses a simple auto-scaled grayscale filter.
+// No histogram or colorbar are drawn.
+//===============================================================
+
+    var simpleAutoScaleFilter = function(context, callback) {
+      const imgData = context.getImageData(0, 0, context.canvas.width, context.canvas.height);
+      const pxl = imgData.data;
+      const nhist = ColorStretch.filter.accumulate(pxl, ColorStretch.decoders.raw);
+      const nstretch = nhist.makeStretcher(ColorStretch.colormaps.gray);
+      ColorStretch.filter.apply(pxl, ColorStretch.decoders.raw, nstretch);
+      context.putImageData(imgData, 0, 0);
+      callback();
+    };
+
+    viewer.navigator.setFilterOptions({
+      filters: { processors: simpleAutoScaleFilter }
+    });
+
+//===============================================================
+// colormap and colormap displays
+//===============================================================
+
+    // define colormap globals:  blue for underflow, red for overflow
+    ColorStretch.colormaps.underflow = [0, 0, 255, 255];
+    ColorStretch.colormaps.overflow = [255, 0, 0, 255];
+
+    // initial colormap
+    var cmap = ColorStretch.colormaps.saoA;
+
+    // special colorbar histogram from colorstretch.js
+    var drawColorbarHistogram = function(chist, stretcher) {
+      if (!chist.valid()) return;
+      const renderer = new ColorStretch.Renderer(chist, 700, 250, 0.1, 0.25);
+      renderer.logy = true;
+      const colorbar = document.getElementById("colorbar");
+      const ctx = colorbar.getContext("2d");
+      // draw the histogram and colorbar
+      ctx.clearRect(0, 0, 700, 250);
+      renderer.draw(ctx, stretcher);
+
+      // add a mouse listener for histogram to get value and counts
+      colorbar.addEventListener('mousemove', function(e) {
+        let cq = document.querySelectorAll('.info .colorquery')[0];
+        let d = renderer.info(e.offsetX);
+        if (d.valid) {
+          cq.innerHTML = "Value=" + d.value + " counts=" + d.counts;
+        } else {
+          cq.innerHTML = "";
+        }
+      });
+    };
+
+    // EXAMPLE D3/PLOT CODE
+    // we draw histogram as a line to avoid having to rebin
+    var drawD3Histogram = function(chist) {
+      let xy = new Array(chist.nbins());
+      const xwidth = chist.dx();
+      for (let i = 0; i < chist.nbins(); i++) {
+        const x = chist.xlo + i * xwidth;
+        xy[i] = new Array(x, chist.data[i]);
+      }
+      const plt = Plot.line(xy).plot();
+      let plothist = document.getElementById("plothist");
+      if (plothist) plothist.replaceChildren(plt);
+    };
+
+//===============================================================
+// status of last stretch function and its input data
+//===============================================================
+
+    // last ColorStretch function (initialize to invalid values)
+    //var lastHist = null;
+    var lastStretch = null;
+    //var lastRange = [ 1<<18, 0 ];
+
+    // accumulator array of Array, indexed by zone
+    var accdata = null;
+    // histogram array of ColorStretch.Histogram(accdata[ih], 0, asize)
+    var acchist = null;
+    // xy zones
+    var xstart = null;
+    var xwidth = null;
+    var ystart = null;
+    var ywidth = null;
+
+    var resetStretch = function() {
+      console.log('resetStretch called');
+      if (lastStretch) {
+        for (let ix = 0; ix < xstart.length; ix++) {
+          for (let iy = 0; iy < ystart.length; iy++) {
+            delete lastStretch[ix][iy];
+          }
+          delete lastStretch[ix];
+        }
+        delete lastStretch;
+        lastStretch = null;
+      }
+      delete xstart;
+      delete xwidth;
+      delete ystart;
+      delete ywidth;
+      xstart = null;
+      xwidth = null;
+      ystart = null;
+      ywidth = null;
+    }
+
+    var resetAccumulators = function() {
+      console.log('resetAccumulators called');
+      if (!xstart || !ystart) return;
+      if (accdata) {
+        for (let ix = 0; ix < xstart.length; ix++) {
+          for (let iy = 0; iy < ystart.length; iy++) {
+            delete accdata[ix][iy];
+          }
+          delete accdata[ix];
+        }
+        delete accdata;
+        accdata = null;
+      }
+      if (acchist) {
+        for (let ix = 0; ix < xstart.length; ix++) {
+          for (let iy = 0; iy < ystart.length; iy++) {
+            delete acchist[ix][iy];
+          }
+          delete acchist[ix];
+        }
+        delete acchist;
+        acchist = null;
+      }
+    }
+
+    var isRowEmpty = function(irow, pxl, width) {
+      const w = 4 * width;
+      let p = irow * w;
+      for (let i = 0; i < width; i++) {
+        if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) return false;
+        p += 4;
+      }
+      return true;
+    }
+
+    var isColumnEmpty = function(icol, pxl, width, height) {
+      const w = 4 * width;
+      let p = 4 * icol;
+      for (let i = 0; i < height; i++) {
+        if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) return false;
+        p += w;
+      }
+      return true;
+    }
+
+    var applyStretch = function(context, stretch) {
+      const imgData = context.getImageData(0, 0, context.canvas.width,
+                                                 context.canvas.height);
+      const pxl = imgData.data;
+      for (let ix = 0; ix < xstart.length; ix++) {
+        for (let iy = 0; iy < ystart.length; iy++) {
+          if (stretch[ix][iy]) {
+            const idat = context.getImageData(xstart[ix], ystart[iy],
+                                              xwidth[ix], ywidth[iy]);
+            ColorStretch.filter.apply(idat.data, ColorStretch.decoders.raw,
+                                      stretch[ix][iy]);
+            context.putImageData(idat, xstart[ix], ystart[iy]);
+            //ColorStretch.filter.applyToRect(pxl, context.canvas.width,
+            //                                xstart[ix], ystart[iy],
+            //                                xwidth[ix], ywidth[iy],
+            //                                ColorStretch.decoders.raw,
+            //                                lastStretch[ix][iy]);
+          }
+        }
+      }
+      //context.putImageData(imgData, 0, 0);
+    }
+
+    // main filter:  accumulate data, but also apply whatever stretch we can
+    var accumulateFilter = function(context, callback) {
+      if (lastStretch) {
+        applyStretch(context, lastStretch);
+      } else {
+        // if no stretch, make one from current image.
+        // have to divide the image
+        const minv = parseInt(document.getElementById("minv").value);
+        const maxv = parseInt(document.getElementById("maxv").value);
+        const cbminv = parseInt(document.getElementById("cbminv").value);
+        const cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+        const cbx = parseInt(document.getElementById("cbx").value);
+        const cby = parseInt(document.getElementById("cby").value);
+        const imgData = context.getImageData(0, 0, context.canvas.width,
+                                                   context.canvas.height);
+        const pxl = imgData.data;
+
+        // divide image into xy zones
+        ystart = [];
+        ywidth = [];
+        for (let iy = 0; iy < context.canvas.height; iy++) {
+          if (isRowEmpty(iy, pxl, context.canvas.width)) {
+            if (ystart.length != ywidth.length) {
+              ywidth.push(iy - ystart[ystart.length-1]);
+            }
+          } else {
+            if (ystart.length == ywidth.length) ystart.push(iy);
+          }
+        }
+        if (ystart.length != ywidth.length) {
+          ywidth.push(context.canvas.height - ystart[ystart.length-1]);
+        }
+        xstart = [];
+        xwidth = [];
+        for (let ix = 0; ix < context.canvas.width; ix++) {
+          if (isColumnEmpty(ix, pxl, context.canvas.width,
+                                     context.canvas.height)) {
+            if (xstart.length != xwidth.length) {
+              xwidth.push(ix - xstart[xstart.length-1]);
+            }
+          } else {
+            if (xstart.length == xwidth.length) xstart.push(ix);
+          }
+        }
+        if (xstart.length != xwidth.length) {
+          xwidth.push(context.canvas.width - xstart[xstart.length-1]);
+        }
+        console.log('  xstart = ' + xstart);
+        console.log('  xwidth = ' + xwidth);
+        console.log('  ystart = ' + ystart);
+        console.log('  ywidth = ' + ywidth);
+
+        // calculate size of colormap histograms
+        // (try not to have too many multiples of 2**18)
+        const nhist = xstart.length * ystart.length;
+        //let nbits = 0;
+        //let n = nhist;
+        //while (n > 1) {
+        //  n >>= 1;
+        //  nbits++;
+        //}
+        //const asize = (1 << (18 - nbits)); // change the 18 if want smaller
+        const asize = (1 << 18);
+        console.log('  nhist = ' + nhist);
+        console.log('  asize = ' + asize);
+        accdata = new Array(xstart.length);
+        acchist = new Array(xstart.length);
+        lastStretch = new Array(xstart.length);
+        for (let ix = 0; ix < xstart.length; ix++) {
+          accdata[ix] = new Array(ystart.length);
+          acchist[ix] = new Array(ystart.length);
+          lastStretch[ix] = new Array(ystart.length);
+          for (let iy = 0; iy < ystart.length; iy++) {
+            console.log('  ix,iy = ' + ix + ',' + iy);
+            accdata[ix][iy] = new Array(asize);
+            for (let i = 0; i < asize; i++) accdata[ix][iy][i] = 0;
+            acchist[ix][iy] = new ColorStretch.Histogram(accdata[ix][iy],
+                                                         0, asize);
+            const idat = context.getImageData(xstart[ix], ystart[iy],
+                                              xwidth[ix], ywidth[iy]);
+            ColorStretch.filter.fill(acchist[ix][iy], idat.data,
+                                     ColorStretch.decoders.raw);
+            //ColorStretch.filter.fillFromRect(acchist[ix][iy],
+            //                                 pxl, context.canvas.width,
+            //                                 xstart[ix], ystart[iy],
+            //                                 xwidth[ix], ywidth[iy],
+            //                                 ColorStretch.decoders.raw);
+            console.log('  acchist range = ' + acchist[ix][iy].getRange());
+            const hist = acchist[ix][iy].trim(1);
+            console.log('  hist range = ' + hist.getRange());
+            if (hist.valid()) {
+              console.log('  hist valid');
+              lastStretch[ix][iy] = hist.makeStretcher(cmap, minv, maxv);
+              ColorStretch.filter.apply(idat.data, ColorStretch.decoders.raw,
+                                        lastStretch[ix][iy]);
+              context.putImageData(idat, xstart[ix], ystart[iy]);
+              //ColorStretch.filter.applyToRect(pxl, context.canvas.width,
+              //                                xstart[ix], ystart[iy],
+              //                                xwidth[ix], ywidth[iy],
+              //                                ColorStretch.decoders.raw,
+              //                                lastStretch[ix][iy]);
+              if (ix == cbx && iy == cby) {
+                console.log('  draw colorbar histograms');
+                drawColorbarHistogram(hist.trim(cbminv, cbmaxv),
+                                      lastStretch[ix][iy]);
+                drawD3Histogram(acchist[ix][iy]);
+              }
+            } else {
+              lastStretch[ix][iy] = null;
+            }
+          }
+        }
+        //context.putImageData(imgData, 0, 0);
+
+        //pixrangeEl.innerHTML = 'Pixel range:<br>' + ps;
+        //console.log('ps = ' + ps);
+      }
+
+      callback();
+    };
+
+    viewer.setFilterOptions({
+      filters: {
+        processors: accumulateFilter,
+      },
+      loadMode: 'sync'
+    });
+
+//===============================================================
+// viewer and doc events
+//===============================================================
+
+    // zoom should be raised when zoom level changed.
+    //viewer.addHandler('zoom', function(ev) {
+    //  resetAccumulators();
+    //});
+
+    // pull-down menu to change colormap
+    var colorMapMenu = document.getElementById('cmap');
+    colorMapMenu.addEventListener('change', function() {
+      let v = colorMapMenu.value;
+      if (v == 'saoA') cmap = ColorStretch.colormaps.saoA;
+      else if (v == 'saoB') cmap = ColorStretch.colormaps.saoB;
+      else if (v == 'saoBB') cmap = ColorStretch.colormaps.saoBB;
+      else if (v == 'standard') cmap = ColorStretch.colormaps.standard;
+      else cmap = ColorStretch.colormaps.gray;
+
+      const minv = parseInt(document.getElementById("minv").value);
+      const maxv = parseInt(document.getElementById("maxv").value);
+      const cbminv = parseInt(document.getElementById("cbminv").value);
+      const cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+      const cbx = parseInt(document.getElementById("cbx").value);
+      const cby = parseInt(document.getElementById("cby").value);
+      for (let ix = 0; ix < xstart.length; ix++) {
+        for (let iy = 0; iy < ystart.length; iy++) {
+          const hist = acchist[ix][iy].trim(1);
+          if (hist.valid()) {
+            lastStretch[ix][iy] = hist.makeStretcher(cmap, minv, maxv);
+            if (ix == cbx && iy == cby) {
+              drawColorbarHistogram(hist.trim(cbminv, cbmaxv),
+                                    lastStretch[ix][iy]);
+              drawD3Histogram(acchist[ix][iy]);
+            }
+          }
+        }
+      }
+
+      viewer.setFilterOptions({
+        filters: { processors: accumulateFilter },
+        loadMode: 'sync'
+      });
+    });
+
+    // redraw color histogram if change min/max parameters
+    var redrawColorbarHistogram = function() {
+      const cbminv = parseInt(document.getElementById("cbminv").value);
+      const cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+      const ix = parseInt(document.getElementById("cbx").value);
+      const iy = parseInt(document.getElementById("cby").value);
+      if (ix >= 0 && ix < xstart.length && iy >= 0 && iy < ystart.length) {
+        drawColorbarHistogram(acchist[ix][iy].trim(cbminv, cbmaxv),
+                              lastStretch[ix][iy]);
+      }
+    }
+
+    cbMinEl.addEventListener('input', redrawColorbarHistogram);
+    cbMaxEl.addEventListener('input', redrawColorbarHistogram);
+    cbxEl.addEventListener('input', redrawColorbarHistogram);
+    cbyEl.addEventListener('input', redrawColorbarHistogram);
+
+    // button which causes re-evaluation of stretch,
+    // based on previously accumulated histograms.
+    // Selects level with largest average range.
+    // (Not sure if this is what we really want?)
+    restretchButton.addEventListener('click', function() {
+      resetStretch();
+      resetAccumulators();
+      viewer.setFilterOptions({
+        filters: { processors: accumulateFilter },
+        loadMode: 'sync'
+      });
+    });
+
+    </script>
+    <noscript>
+      <p>OpenSeadragon not available unless JS enabled</p>
+    </noscript>
+</div>
+
+</body>
+</html>
