@@ -6,7 +6,7 @@
 <script src="openseadragon/openseadragon.js"></script>
 <script src="d3.min.js"></script>
 <script src="plot.min.js"></script>
-<script src="openseadragon-filtering-lsst.js"></script>
+<script src="openseadragon-filtering.js"></script>
 <script src="colorstretch.js"></script>
 </head>
 <body>
@@ -188,7 +188,6 @@
 
     // special colorbar histogram from colorstretch.js
     var drawColorbarHistogram = function(chist, stretcher) {
-      if (!chist.valid()) return;
       const renderer = new ColorStretch.Renderer(chist, 700, 250, 0.1, 0.25);
       renderer.logy = true;
       const colorbar = document.getElementById("colorbar");
@@ -196,7 +195,6 @@
       // draw the histogram and colorbar
       ctx.clearRect(0, 0, 700, 250);
       renderer.draw(ctx, stretcher);
-
       // add a mouse listener for histogram to get value and counts
       colorbar.addEventListener('mousemove', function(e) {
         let cq = document.querySelectorAll('.info .colorquery')[0];
@@ -207,6 +205,12 @@
           cq.innerHTML = "";
         }
       });
+    };
+
+    var clearColorbarHistogram = function() {
+      const colorbar = document.getElementById("colorbar");
+      const ctx = colorbar.getContext("2d");
+      ctx.clearRect(0, 0, 700, 250);
     };
 
     // EXAMPLE D3/PLOT CODE
@@ -400,6 +404,7 @@
         accdata = new Array(xstart.length);
         acchist = new Array(xstart.length);
         lastStretch = new Array(xstart.length);
+        let cbDrawn = false;
         for (let ix = 0; ix < xstart.length; ix++) {
           accdata[ix] = new Array(ystart.length);
           acchist[ix] = new Array(ystart.length);
@@ -438,6 +443,7 @@
                 drawColorbarHistogram(hist.trim(cbminv, cbmaxv),
                                       lastStretch[ix][iy]);
                 drawD3Histogram(acchist[ix][iy]);
+                cbDrawn = true;
               }
             } else {
               lastStretch[ix][iy] = null;
@@ -445,6 +451,8 @@
           }
         }
         //context.putImageData(imgData, 0, 0);
+
+        if (!cbDrawn) clearColorbarHistogram();
 
         //pixrangeEl.innerHTML = 'Pixel range:<br>' + ps;
         //console.log('ps = ' + ps);
@@ -485,6 +493,7 @@
       const cbmaxv = parseInt(document.getElementById("cbmaxv").value);
       const cbx = parseInt(document.getElementById("cbx").value);
       const cby = parseInt(document.getElementById("cby").value);
+      let cbDrawn = false;
       for (let ix = 0; ix < xstart.length; ix++) {
         for (let iy = 0; iy < ystart.length; iy++) {
           const hist = acchist[ix][iy].trim(1);
@@ -494,10 +503,12 @@
               drawColorbarHistogram(hist.trim(cbminv, cbmaxv),
                                     lastStretch[ix][iy]);
               drawD3Histogram(acchist[ix][iy]);
+              cbDrawn = true;
             }
           }
         }
       }
+      if (!cbDrawn) clearColorHistogram();
 
       viewer.setFilterOptions({
         filters: { processors: accumulateFilter },
@@ -514,6 +525,8 @@
       if (ix >= 0 && ix < xstart.length && iy >= 0 && iy < ystart.length) {
         drawColorbarHistogram(acchist[ix][iy].trim(cbminv, cbmaxv),
                               lastStretch[ix][iy]);
+      } else {
+        clearColorbarHistogram();
       }
     }
 
