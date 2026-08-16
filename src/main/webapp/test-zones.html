@@ -101,13 +101,13 @@
               if (rect.containsPoint(viewportPoint)) {
                 var imagePoint = img.viewportToImageCoordinates(viewportPoint);
                 positionEl.innerHTML = 'Web: ' + webPoint.toString() + 
-                    '<br><br>Viewport:<br>' + viewportPoint.toString() +
-                    '<br><br>Item:<br>' + i +
-                    '<br><br>Image:<br>' + imagePoint.toString();
+                    '<br><br>Viewport: ' + viewportPoint.toString() +
+                    '<br><br>Item: ' + i +
+                    '<br><br>Image: ' + imagePoint.toString();
                 break;
               }
               positionEl.innerHTML = 'Web: ' + webPoint.toString() + 
-                  '<br><br>Viewport:<br>' + viewportPoint.toString();
+                  '<br><br>Viewport: ' + viewportPoint.toString();
             }
             updateZoom();     
         }
@@ -119,12 +119,37 @@
         id: "openseadragon1",
         prefixUrl: "openseadragon/images/",
         showNavigator: true,
-        crossOriginPolicy: true,
+        crossOriginPolicy: 'Anonymous',
         maxZoomPixelRatio: 4,
-        debugMode: false
+        debugMode: false,
+        drawer: 'canvas'
       });
 
-    viewer.navigator.setFilterOptions = viewer.setFilterOptions;
+//===============================================================
+// navigator:
+// this uses a simple auto-scaled grayscale filter.
+// No histogram or colorbar are drawn.
+//===============================================================
+
+    var simpleAutoScaleFilter = function(context) {
+      console.log('simpleAutoScaleFilter w,h = ' + context.canvas.width + ',' + context.canvas.height);
+      const imgData = context.getImageData(0, 0, context.canvas.width, context.canvas.height);
+      const pxl = imgData.data;
+      const nhist = ColorStretch.filter.accumulate(pxl, ColorStretch.decoders.raw);
+      const nstretch = nhist.makeStretcher(ColorStretch.colormaps.gray);
+      ColorStretch.filter.apply(pxl, ColorStretch.decoders.raw, nstretch);
+      context.putImageData(imgData, 0, 0);
+      //callback();
+    };
+
+    //viewer.addHandler('open', function() {
+    //  if (viewer.navigator) {
+        //viewer.navigator.setFilterOptions = viewer.setFilterOptions;
+        //viewer.navigator.setFilterOptions({
+        //  filters: { processors: simpleAutoScaleFilter }
+        //});
+    //  }
+    //});
 
     openHandler();
 
@@ -154,26 +179,6 @@
         x: 0.0, y: 0.0, width: 0.4
       });
 */
-
-//===============================================================
-// navigator:
-// this uses a simple auto-scaled grayscale filter.
-// No histogram or colorbar are drawn.
-//===============================================================
-
-    var simpleAutoScaleFilter = function(context, callback) {
-      const imgData = context.getImageData(0, 0, context.canvas.width, context.canvas.height);
-      const pxl = imgData.data;
-      const nhist = ColorStretch.filter.accumulate(pxl, ColorStretch.decoders.raw);
-      const nstretch = nhist.makeStretcher(ColorStretch.colormaps.gray);
-      ColorStretch.filter.apply(pxl, ColorStretch.decoders.raw, nstretch);
-      context.putImageData(imgData, 0, 0);
-      callback();
-    };
-
-    viewer.navigator.setFilterOptions({
-      filters: { processors: simpleAutoScaleFilter }
-    });
 
 //===============================================================
 // colormap and colormap displays
@@ -303,6 +308,21 @@
       return true;
     }
 
+    var printRowNonEmpty = function(irow, pxl, width) {
+      const w = 4 * width;
+      let p = irow * w;
+      for (let i = 0; i < width; i++) {
+        if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) {
+          console.log('printRowNonEmpty:  ' + irow + ',' + i + ': ' +
+                      pxl[p] + ',' + pxl[p+1] + ',' + pxl[p+2] + ',' +
+                      pxl[p+3]);
+          return;
+        }
+        p += 4;
+      }
+      console.log('printRowNonEmpty:  no non-empty pixels');
+    }
+
     var isColumnEmpty = function(icol, pxl, width, height) {
       const w = 4 * width;
       let p = 4 * icol;
@@ -337,8 +357,18 @@
     }
 
     // main filter:  accumulate data, but also apply whatever stretch we can
-    var accumulateFilter = function(context, callback) {
+    var accumulateFilter = function(context) {
+
+      // UGLY HACK: if canvas 100x100, assume it's the navigator
+      if (context.canvas.width == 100 && context.canvas.height == 100) {
+        simpleAutoScaleFilter(context);
+        return;
+      }
+      //console.log('accumulateFilter:  context');
+      //for (k in context) console.log('  ' + k + ': ' + context[k]);
+      //console.log('end context');
       if (lastStretch) {
+        console.log('accumulateFilter: use lastStretch w,h = ' + context.canvas.width + ',' + context.canvas.height);
         applyStretch(context, lastStretch);
       } else {
         // if no stretch, make one from current image.
@@ -352,6 +382,8 @@
         const imgData = context.getImageData(0, 0, context.canvas.width,
                                                    context.canvas.height);
         const pxl = imgData.data;
+
+        console.log('accumulateFilter: new stretch w,h = ' + context.canvas.width + ',' + context.canvas.height);
 
         // divide image into xy zones
         ystart = [];
@@ -458,7 +490,7 @@
         //console.log('ps = ' + ps);
       }
 
-      callback();
+      //callback();
     };
 
     viewer.setFilterOptions({
@@ -473,9 +505,37 @@
 //===============================================================
 
     // zoom should be raised when zoom level changed.
-    //viewer.addHandler('zoom', function(ev) {
+    viewer.addHandler('zoom', function(ev) {
     //  resetAccumulators();
-    //});
+      console.log('zoom ' + ev.zoom + ' imm ' + ev.immediately);
+      if (ev.refPoint) console.log('  refPoint ' + ev.refPoint.x + ',' + ev.refPoint.y);
+      else console.log('  refPoint null');
+      console.log('  ev = ' + ev);
+      for (k in ev) console.log('    key ' + k + ': ' + ev[k]);
+      if (ev.eventSource) {
+        const vp = ev.eventSource.viewport;
+
+        const b = vp.getBounds(false); // target location
+        console.log('    target bounds x,y,w,h = ' + b.x + ',' + b.y + ' ' + b.width + ',' + b.height);
+        const c = vp.getBounds(true); // current location
+        console.log('    current bounds x,y,w,h = ' + c.x + ',' + c.y + ' ' + c.width + ',' + c.height);
+        const bi = vp.viewportToImageRectangle(c);
+        console.log('             image x,y,w,h = ' + bi.x + ',' + bi.y + ' ' + bi.width + ',' + bi.height);
+        const be = vp.viewportToViewerElementRectangle(c);
+        console.log('           element x,y,w,h = ' + be.x + ',' + be.y + ' ' + be.width + ',' + be.height);
+
+        const ct = vp.getCenter(false);
+        console.log('    target center x,y = ' + ct.x + ',' + ct.y);
+        const cc = vp.getCenter(true);
+        console.log('    current center x,y = ' + cc.x + ',' + cc.y);
+        const ci = vp.viewportToImageCoordinates(cc);
+        console.log('             image x,y = ' + ci.x + ',' + ci.y);
+        const ce = vp.viewportToViewerElementCoordinates(cc);
+        console.log('           element x,y = ' + ce.x + ',' + ce.y);
+        const cw = vp.viewportToWindowCoordinates(cc);
+        console.log('            window x,y = ' + cw.x + ',' + cw.y);
+      }
+    });
 
     // pull-down menu to change colormap
     var colorMapMenu = document.getElementById('cmap');
