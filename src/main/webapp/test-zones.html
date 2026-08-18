@@ -15,6 +15,7 @@
 <p>
 <div id="container">
 <div style="padding: 0 1.5em; height: 600px;">
+    <div id="navigator1" style="width: 100px; height: 120px;"></div>
     <div class="info" style="float: left; width: 300px;">
       Stretch parameters:<br>
       <label for="minv">Min:</label>
@@ -119,6 +120,8 @@
         id: "openseadragon1",
         prefixUrl: "openseadragon/images/",
         showNavigator: true,
+        //navigatorId: "navigator1",
+        navigatorElement: document.getElementById("navigator1"),
         crossOriginPolicy: 'Anonymous',
         maxZoomPixelRatio: 4,
         debugMode: false,
@@ -152,6 +155,18 @@
     //});
 
     openHandler();
+
+    const nav = document.getElementById("navigator1");
+    const cvss = document.getElementsByTagName('canvas');
+    let cvn = null;
+    for (let i = 0; i < cvss.length; i++) {
+      if (cvss[i].parentNode.parentNode.parentNode == nav) {
+        cvn = cvss[i];
+        console.log("navigator canvas found");
+        break;
+      }
+    }
+    console.log("  = " + cvn);
 
 //===============================================================
 // test images
@@ -359,8 +374,15 @@
     // main filter:  accumulate data, but also apply whatever stretch we can
     var accumulateFilter = function(context) {
 
-      // UGLY HACK: if canvas 100x100, assume it's the navigator
-      if (context.canvas.width == 100 && context.canvas.height == 100) {
+      console.log("accumulateFilter:  context id = " + context.canvas.id);
+      console.log("accumulateFilter:  context canvas = " + context.canvas);
+      console.log("  node name = " + context.canvas.nodeName);
+      console.log("  node type = " + context.canvas.nodeType);
+      console.log("  parent node = " + context.canvas.parentNode);
+      console.log("  parent element = " + context.canvas.parentElement);
+
+      // if navigator, invoke simple filter
+      if (context.canvas == cvn) {
         simpleAutoScaleFilter(context);
         return;
       }
