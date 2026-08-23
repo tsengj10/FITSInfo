@@ -15,7 +15,7 @@
 <p>
 <div id="container">
 <div style="padding: 0 1.5em; height: 600px;">
-    <div id="navigator1" style="width: 100px; height: 120px;"></div>
+    <!-- div id="navigator1" style="width: 100px; height: 120px;"></div -->
     <div class="info" style="float: left; width: 300px;">
       Stretch parameters:<br>
       <label for="minv">Min:</label>
@@ -121,7 +121,7 @@
         prefixUrl: "openseadragon/images/",
         showNavigator: true,
         //navigatorId: "navigator1",
-        navigatorElement: document.getElementById("navigator1"),
+        //navigatorElement: document.getElementById("navigator1"),
         crossOriginPolicy: 'Anonymous',
         maxZoomPixelRatio: 4,
         debugMode: false,
@@ -156,17 +156,18 @@
 
     openHandler();
 
-    const nav = document.getElementById("navigator1");
-    const cvss = document.getElementsByTagName('canvas');
-    let cvn = null;
-    for (let i = 0; i < cvss.length; i++) {
-      if (cvss[i].parentNode.parentNode.parentNode == nav) {
-        cvn = cvss[i];
-        console.log("navigator canvas found");
-        break;
-      }
-    }
-    console.log("  = " + cvn);
+    //const nav = document.getElementById("navigator1");
+    //const cvss = document.getElementsByTagName('canvas');
+    //console.log("cvss length = " + cvss.length);
+    //let cvn = null;
+    //for (let i = 0; i < cvss.length; i++) {
+    //  if (cvss[i].parentNode.parentNode.parentNode == nav) {
+    //    cvn = cvss[i];
+    //    console.log("navigator canvas found");
+    //    break;
+    //  }
+    //}
+    //console.log("  = " + cvn);
 
 //===============================================================
 // test images
@@ -278,6 +279,10 @@
         delete lastStretch;
         lastStretch = null;
       }
+    }
+
+    var requireRezone = function() {
+      console.log('requireRezone called');
       delete xstart;
       delete xwidth;
       delete ystart;
@@ -286,6 +291,53 @@
       xwidth = null;
       ystart = null;
       ywidth = null;
+    }
+
+    var needRezone = function() {
+      return (xstart == null);
+    }
+
+    var rezone = function(context) {
+      console.log('rezone called');
+
+      const imgData = context.getImageData(0, 0, context.canvas.width,
+                                                 context.canvas.height);
+      const pxl = imgData.data;
+
+      // divide image into xy zones
+      ystart = [];
+      ywidth = [];
+      for (let iy = 0; iy < context.canvas.height; iy++) {
+        if (isRowEmpty(iy, pxl, context.canvas.width)) {
+          if (ystart.length != ywidth.length) {
+            ywidth.push(iy - ystart[ystart.length-1]);
+          }
+        } else {
+          if (ystart.length == ywidth.length) ystart.push(iy);
+        }
+      }
+      if (ystart.length != ywidth.length) {
+        ywidth.push(context.canvas.height - ystart[ystart.length-1]);
+      }
+      xstart = [];
+      xwidth = [];
+      for (let ix = 0; ix < context.canvas.width; ix++) {
+        if (isColumnEmpty(ix, pxl, context.canvas.width,
+                                   context.canvas.height)) {
+          if (xstart.length != xwidth.length) {
+            xwidth.push(ix - xstart[xstart.length-1]);
+          }
+        } else {
+          if (xstart.length == xwidth.length) xstart.push(ix);
+        }
+      }
+      if (xstart.length != xwidth.length) {
+        xwidth.push(context.canvas.width - xstart[xstart.length-1]);
+      }
+      console.log('  xstart = ' + xstart);
+      console.log('  xwidth = ' + xwidth);
+      console.log('  ystart = ' + ystart);
+      console.log('  ywidth = ' + ywidth);
     }
 
     var resetAccumulators = function() {
@@ -373,24 +425,56 @@
 
     // main filter:  accumulate data, but also apply whatever stretch we can
     var accumulateFilter = function(context) {
+      console.log("accumulateFilter:  w,h = " + context.canvas.width + "," +
+                                                context.canvas.height);
+      console.log('viewer items = ' + viewer.world.getItemCount());
 
-      console.log("accumulateFilter:  context id = " + context.canvas.id);
-      console.log("accumulateFilter:  context canvas = " + context.canvas);
-      console.log("  node name = " + context.canvas.nodeName);
-      console.log("  node type = " + context.canvas.nodeType);
-      console.log("  parent node = " + context.canvas.parentNode);
-      console.log("  parent element = " + context.canvas.parentElement);
+
+      //console.log("accumulateFilter:  context id = " + context.canvas.id);
+      //console.log("accumulateFilter:  context canvas = " + context.canvas);
+      //console.log("  node name = " + context.canvas.nodeName);
+      //console.log("  node type = " + context.canvas.nodeType);
+      //console.log("  parent node = " + context.canvas.parentNode);
+      //console.log("  parent element = " + context.canvas.parentElement);
+      //console.log("  tag name = " + context.canvas.tagName);
+      //console.log("  local name = " + context.canvas.localName);
+      //console.log("  cvn = " + cvn);
+      //console.log("  cvn id = " + cvn.id);
+      //console.log("  cvn parent node = " + cvn.parentNode);
+      //console.log("  cvn parent element = " + cvn.parentElement);
+      //console.log("  cvn parent id = " + cvn.parentNode.id);
+      //console.log("  cvn ggparent id = " + cvn.parentNode.parentNode.parentNode.id);
+
+      // check if it matches with any other canvas
+      //const cs = document.getElementsByTagName('canvas');
+      //console.log("  number of canvases in doc = " + cs.length);
+      //for (let i = 0; i < cs.length; i++) {
+      //  console.log('    canvas ' + i + ': ' + cs[i] + ' ' + cs[i].id + ' ' + cs[i].parentNode);
+      //  if (cs[i] === context.canvas) {
+      //    console.log('    matched ' + i + ': ' + cs[i].parentNode);
+      //    break;
+      //  }
+      //}
 
       // if navigator, invoke simple filter
-      if (context.canvas == cvn) {
-        simpleAutoScaleFilter(context);
-        return;
-      }
+      //if (context.canvas === cvn) {
+      //  simpleAutoScaleFilter(context);
+      //  return;
+      //}
       //console.log('accumulateFilter:  context');
       //for (k in context) console.log('  ' + k + ': ' + context[k]);
       //console.log('end context');
+
+      // if it's a small tile, use the simple grayscale filter
+      // (this is really a hack to distinguish navigator)
+      if (context.canvas.width <= 100 && context.canvas.height <= 100) {
+        simpleAutoScaleFilter(context);
+        return;
+      }
+
       if (lastStretch) {
         console.log('accumulateFilter: use lastStretch w,h = ' + context.canvas.width + ',' + context.canvas.height);
+        if (needRezone()) rezone(context);
         applyStretch(context, lastStretch);
       } else {
         // if no stretch, make one from current image.
@@ -407,40 +491,7 @@
 
         console.log('accumulateFilter: new stretch w,h = ' + context.canvas.width + ',' + context.canvas.height);
 
-        // divide image into xy zones
-        ystart = [];
-        ywidth = [];
-        for (let iy = 0; iy < context.canvas.height; iy++) {
-          if (isRowEmpty(iy, pxl, context.canvas.width)) {
-            if (ystart.length != ywidth.length) {
-              ywidth.push(iy - ystart[ystart.length-1]);
-            }
-          } else {
-            if (ystart.length == ywidth.length) ystart.push(iy);
-          }
-        }
-        if (ystart.length != ywidth.length) {
-          ywidth.push(context.canvas.height - ystart[ystart.length-1]);
-        }
-        xstart = [];
-        xwidth = [];
-        for (let ix = 0; ix < context.canvas.width; ix++) {
-          if (isColumnEmpty(ix, pxl, context.canvas.width,
-                                     context.canvas.height)) {
-            if (xstart.length != xwidth.length) {
-              xwidth.push(ix - xstart[xstart.length-1]);
-            }
-          } else {
-            if (xstart.length == xwidth.length) xstart.push(ix);
-          }
-        }
-        if (xstart.length != xwidth.length) {
-          xwidth.push(context.canvas.width - xstart[xstart.length-1]);
-        }
-        console.log('  xstart = ' + xstart);
-        console.log('  xwidth = ' + xwidth);
-        console.log('  ystart = ' + ystart);
-        console.log('  ywidth = ' + ywidth);
+        rezone(context);
 
         // calculate size of colormap histograms
         // (try not to have too many multiples of 2**18)
@@ -522,28 +573,49 @@
       loadMode: 'sync'
     });
 
+/*
+    viewer.setFilterOptions({
+      filters: [
+        {
+          items: viewer.world.getItemAt(0),
+          processors: accumulateFilter
+        },
+        {
+          items: viewer.navigator.world.getItemAt(0),
+          processors: simpleAutoScaleFilter
+        }
+      ]
+    });
+*/
+
 //===============================================================
 // viewer and doc events
 //===============================================================
 
     // zoom should be raised when zoom level changed.
     viewer.addHandler('zoom', function(ev) {
-    //  resetAccumulators();
+      //resetStretch();
+      //resetAccumulators();
       console.log('zoom ' + ev.zoom + ' imm ' + ev.immediately);
       if (ev.refPoint) console.log('  refPoint ' + ev.refPoint.x + ',' + ev.refPoint.y);
       else console.log('  refPoint null');
-      console.log('  ev = ' + ev);
-      for (k in ev) console.log('    key ' + k + ': ' + ev[k]);
+      //console.log('  ev = ' + ev);
+      //for (k in ev) console.log('    key ' + k + ': ' + ev[k]);
       if (ev.eventSource) {
+        requireRezone();
+
         const vp = ev.eventSource.viewport;
+        console.log('  getZoom -> ' + vp.getZoom());
+        console.log('  zoom im to vp 1 -> ' + vp.imageToViewportZoom(1.0));
+        console.log('  zoom vp to im 1 -> ' + vp.viewportToImageZoom(1));
 
         const b = vp.getBounds(false); // target location
         console.log('    target bounds x,y,w,h = ' + b.x + ',' + b.y + ' ' + b.width + ',' + b.height);
         const c = vp.getBounds(true); // current location
         console.log('    current bounds x,y,w,h = ' + c.x + ',' + c.y + ' ' + c.width + ',' + c.height);
-        const bi = vp.viewportToImageRectangle(c);
+        const bi = vp.viewportToImageRectangle(b);
         console.log('             image x,y,w,h = ' + bi.x + ',' + bi.y + ' ' + bi.width + ',' + bi.height);
-        const be = vp.viewportToViewerElementRectangle(c);
+        const be = vp.viewportToViewerElementRectangle(b);
         console.log('           element x,y,w,h = ' + be.x + ',' + be.y + ' ' + be.width + ',' + be.height);
 
         const ct = vp.getCenter(false);
