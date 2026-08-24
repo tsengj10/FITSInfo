@@ -175,7 +175,7 @@
 
     viewer.addTiledImage({
         tileSource: "http://localhost:8172/iiif/3/testd$source=direct$colorMap=null/info.json",
-        x: 0.0, y: 0.0, width: 1.0
+        x: 0.2, y: 0.3, width: 0.6
       });
 /*
     viewer.addTiledImage({
@@ -424,7 +424,7 @@
     }
 
     // main filter:  accumulate data, but also apply whatever stretch we can
-    var accumulateFilter = function(context) {
+    var accumulateFilter = function(context, ev) {
       console.log("accumulateFilter:  w,h = " + context.canvas.width + "," +
                                                 context.canvas.height);
       console.log('viewer items = ' + viewer.world.getItemCount());
@@ -465,9 +465,8 @@
       //for (k in context) console.log('  ' + k + ': ' + context[k]);
       //console.log('end context');
 
-      // if it's a small tile, use the simple grayscale filter
-      // (this is really a hack to distinguish navigator)
-      if (context.canvas.width <= 100 && context.canvas.height <= 100) {
+      // zoom level 0 only seems to come up when drawing the navigator...?
+      if (ev.tile.level == 0) {
         simpleAutoScaleFilter(context);
         return;
       }

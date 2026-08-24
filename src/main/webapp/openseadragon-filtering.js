@@ -7,6 +7,9 @@
  * guarantees, expressed or implied, about its quality, reliability, or
  * any other characteristic.
  * @author Antoine Vandecreme <antoine.vandecreme@nist.gov>
+ *
+ * patched by Jeff Tseng <jeff.tseng@physics.ox.ac.uk> to add event object
+ * to filter invocation.
  */
 
 (function() {
@@ -62,12 +65,34 @@
                 return;
             }
 
+            //const da = tiledImage.getDrawArea();
+            //const cs = tiledImage.getContentSize();
+            //const bs = tiledImage.getBounds();
+            //console.log('applyFilters: draw area = ' + da.x + ',' + da.y + ' ' + da.width + ',' + da.height);
+            //console.log('applyFilters:    bounds = ' + bs.x + ',' + bs.y + ' ' + bs.width + ',' + bs.height);
+            //console.log('applyFilters: cont size = ' + cs.x + ',' + cs.y);
+            //const cl = tiledImage.getClip();
+            //if (cl) console.log('applyFilters:      clip = ' + cl.x + ',' + cl.y + ' ' + cl.width + ',' + cl.height);
+
+            //const tile = e.tile;
+            //console.log('  tile x,y = ' + tile.x + ',' + tile.y);
+            //console.log('    bounds = ' + tile.bounds.x + ',' + tile.bounds.y
+            //            + ' ' + tile.bounds.width + ',' + tile.bounds.height);
+            //console.log('    zoom level = ' + tile.level);
+            ////console.log('    position = ' + tile.position.x + ',' +
+            ////            tile.position.y);
+            ////console.log('    positioned bounds = ' + tile.positionedBounds.x
+            ////            + ',' + tile.positionedBounds.y + ' '
+            ////            + tile.positionedBounds.width + ','
+            ////            + tile.positionedBounds.height);
+            //console.log('    size = ' + tile.size.x + ',' + tile.size.y);
+
             const contextCopy = await e.getData('context2d');
             if (!contextCopy) return;
 
             for (let i = 0; i < processors.length; i++) {
                 if (e.outdated()) return;
-                await processors[i](contextCopy);
+                await processors[i](contextCopy, e);
             }
             if (e.outdated()) return;
             await e.setData(contextCopy, 'context2d');

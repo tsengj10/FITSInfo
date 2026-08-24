@@ -1,0 +1,473 @@
+<html>
+<head>
+<title>Test Patches</title>
+<link rel='stylesheet' type='text/css' media='screen'
+      href='https://openseadragon.github.io/css/style.css' />
+<script src="openseadragon/openseadragon.js"></script>
+<script src="d3.min.js"></script>
+<script src="plot.min.js"></script>
+<script src="openseadragon-filtering.js"></script>
+<script src="colorstretch.js"></script>
+</head>
+<body>
+<h1>Test patches</h1>
+
+<p>
+<div id="container">
+<div style="padding: 0 1.5em; height: 600px;">
+    <!-- div id="navigator1" style="width: 100px; height: 120px;"></div -->
+    <div class="info" style="float: left; width: 300px;">
+      Stretch parameters:<br>
+      <label for="minv">Min:</label>
+      <input type="number" id="minv" name="minv" value=0>
+      <br>
+      <label for="maxv">Max:</label>
+      <input type="number" id="maxv" name="maxv" value=-1>
+      <div class="menus" style="float: left; width: 300px;">
+      <select name="cmap" id="cmap">
+        <option value="gray">Gray</option>
+        <option value="standard">Standard</option>
+        <option value="saoA" selected="selected">SAO A</option>
+        <option value="saoB">SAO B</option>
+        <option value="saoBB">SAO BB</option>
+      </select>
+      <button type='button' id='restretch'>Restretch</button>
+      </div>
+        <div class="position"></div>
+        <div class="zoom" style="margin-top: 3em;"></div>
+        <div class="rgb" style="margin-top: 3em;"></div>
+        <div class="pixrange" style="margin-top: 3em;"></div>
+        D3/Plot histogram (full range):
+        <div id="plothist"></div>
+      <br>
+        <div class="colorquery" style="margin-top: 3em;"></div>
+    </div>
+    <div id="openseadragon1" style="float: right; width: 380px; height: 500px; background: black;"></div>
+</div>
+</p>
+<br>
+
+<p> Color histogram:<br>
+<div class="cbcontrol" style="float: left; width: 300px;">
+  <label for="cbx">Zone x:</label>
+  <input type="number" id="cbx" name="cbx" value=0>
+  <label for="cby">y:</label>
+  <input type="number" id="cby" name="cby" value=0>
+  <br>
+  <label for="cbminv">Min:</label>
+  <input type="number" id="cbminv" name="cbminv" value=0>
+  <br>
+  <label for="cbmaxv">Max:</label>
+  <input type="number" id="cbmaxv" name="cbmaxv" value=-1>
+</div>
+<canvas id="colorbar" width="700" height="250" style="border:1px solid grey"></canvas>
+</p>
+
+    <script>
+
+//===============================================================
+// viewer
+//===============================================================
+
+    var positionEl = document.querySelectorAll('.info .position')[0];
+    var zoomEl = document.querySelectorAll('.info .zoom')[0];
+    var rgbEl = document.querySelectorAll('.info .rgb')[0];
+    var pixrangeEl = document.querySelectorAll('.info .pixrange')[0];
+
+    var cbMinEl = document.getElementById('cbminv');
+    var cbMaxEl = document.getElementById('cbmaxv');
+    var cbxEl = document.getElementById('cbx');
+    var cbyEl = document.getElementById('cby');
+    var restretchButton = document.getElementById('restretch');
+
+    var updateZoom = function() {
+        var zoom = viewer.viewport.getZoom(true);
+        zoomEl.innerHTML = 'Zoom: ' + (Math.round(zoom * 100) / 100);
+    }
+
+    var openHandler = function() {
+      var tracker = new OpenSeadragon.MouseTracker({
+        element: viewer.container,
+        moveHandler: function(event) {
+            var webPoint = event.position;
+            var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+            var vworld = viewer.world;
+            for (var i = 0; i < vworld.getItemCount(); ++i) {
+              var img = vworld.getItemAt(i);
+              var rect = img.getBounds(true); // rect in viewport coordinates
+              if (rect.containsPoint(viewportPoint)) {
+                var imagePoint = img.viewportToImageCoordinates(viewportPoint);
+                positionEl.innerHTML = 'Web: ' + webPoint.toString() + 
+                    '<br><br>Viewport: ' + viewportPoint.toString() +
+                    '<br><br>Item: ' + i +
+                    '<br><br>Image: ' + imagePoint.toString();
+                break;
+              }
+              positionEl.innerHTML = 'Web: ' + webPoint.toString() + 
+                  '<br><br>Viewport: ' + viewportPoint.toString();
+            }
+            updateZoom();     
+        }
+      });  
+      tracker.setTracking(true);  
+    };
+
+    var viewer = OpenSeadragon({
+        id: "openseadragon1",
+        prefixUrl: "openseadragon/images/",
+        showNavigator: true,
+        crossOriginPolicy: 'Anonymous',
+        maxZoomPixelRatio: 4,
+        debugMode: false,
+        drawer: 'canvas'
+      });
+
+//===============================================================
+// navigator:
+// this uses a simple auto-scaled grayscale filter.
+// No histogram or colorbar are drawn.
+//===============================================================
+
+    var simpleAutoScaleFilter = function(context) {
+      console.log('simpleAutoScaleFilter w,h = ' + context.canvas.width + ',' + context.canvas.height);
+      const imgData = context.getImageData(0, 0, context.canvas.width, context.canvas.height);
+      const pxl = imgData.data;
+      const nhist = ColorStretch.filter.accumulate(pxl, ColorStretch.decoders.raw);
+      const nstretch = nhist.makeStretcher(ColorStretch.colormaps.gray);
+      ColorStretch.filter.apply(pxl, ColorStretch.decoders.raw, nstretch);
+      context.putImageData(imgData, 0, 0);
+    };
+
+    openHandler();
+
+//===============================================================
+// test images
+//===============================================================
+
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/testd$source=direct$colorMap=null/info.json",
+        x: 0.2, y: 0.3, width: 0.6
+      });
+/*
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/post_isr_image_LSSTCam_r_57_MC_O_20250511_000866_R22_S00_LSSTCam_runs_quickLook_3$source=direct$colorMap=null/info.json",
+        x: 0.0, y: 0.0, width: 0.5
+      });
+*/
+/*
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/post_isr_image_LSSTCam_r_57_MC_O_20250511_000866_R22_S01_LSSTCam_runs_quickLook_3$source=direct$colorMap=null/info.json",
+        x: 0.0, y: 0.0, width: 1.0
+      });
+*/
+/*
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/MC_C_20211205_000740_R12_S22$colorMap=null$source=data/info.json",
+        x: 0.0, y: 0.0, width: 0.4
+      });
+*/
+
+//===============================================================
+// colormap and colormap displays
+//===============================================================
+
+    // define colormap globals:  blue for underflow, red for overflow
+    ColorStretch.colormaps.underflow = [0, 0, 255, 255];
+    ColorStretch.colormaps.overflow = [255, 0, 0, 255];
+
+    // initial colormap
+    var cmap = ColorStretch.colormaps.saoA;
+
+    // special colorbar histogram from colorstretch.js
+    var drawColorbarHistogram = function(chist, stretcher) {
+      const renderer = new ColorStretch.Renderer(chist, 700, 250, 0.1, 0.25);
+      renderer.logy = true;
+      const colorbar = document.getElementById("colorbar");
+      const ctx = colorbar.getContext("2d");
+      // draw the histogram and colorbar
+      ctx.clearRect(0, 0, 700, 250);
+      renderer.draw(ctx, stretcher);
+      // add a mouse listener for histogram to get value and counts
+      colorbar.addEventListener('mousemove', function(e) {
+        const cq = document.querySelectorAll('.info .colorquery')[0];
+        const d = renderer.info(e.offsetX);
+        if (d.valid) {
+          cq.innerHTML = "Value=" + d.value + " counts=" + d.counts;
+        } else {
+          cq.innerHTML = "";
+        }
+      });
+    };
+
+    var clearColorbarHistogram = function() {
+      const colorbar = document.getElementById("colorbar");
+      const ctx = colorbar.getContext("2d");
+      ctx.clearRect(0, 0, 700, 250);
+    };
+
+    // EXAMPLE D3/PLOT CODE
+    // we draw histogram as a line to avoid having to rebin
+    var drawD3Histogram = function(chist) {
+      let xy = new Array(chist.nbins());
+      const xwidth = chist.dx();
+      for (let i = 0; i < chist.nbins(); i++) {
+        const x = chist.xlo + i * xwidth;
+        xy[i] = new Array(x, chist.data[i]);
+      }
+      const plt = Plot.line(xy).plot();
+      let plothist = document.getElementById("plothist");
+      if (plothist) plothist.replaceChildren(plt);
+    };
+
+//===============================================================
+// status of last stretch function and its input data.
+// keep track of this for each patch.
+//===============================================================
+
+    class Patch extends OpenSeadragon.Rect {
+      constructor(x, y, width, height, degrees) {
+        super(x, y, width, height, degrees);
+        const asize = (1 << 18);
+        this.bins = new Array(asize);
+        this.reset();
+      }
+      reset() {
+        for (let i = 0; i < this.bins.length; i++) this.bins[i] = 0;
+        this.hist = null;
+        this.stretcher = null;
+      }
+      hasStretcher() {
+        return (this.stretcher != null);
+      }
+      getStretcher(cmap, minv, maxv, imageData, decoder) {
+        if (this.stretcher) {
+          return this.stretcher;
+        }
+        if (!this.hist) {
+          if (imageData != null && decoder != null) {
+            this.hist = new ColorStretch.Histogram(this.bins, 0,
+                                                   this.bins.length);
+            ColorStretch.filter.fill(this.hist, imageData, decoder);
+          } else {
+            return null;
+          }
+        }
+        const h = this.hist.trim(1);
+        if (!h.valid()) return null;
+        this.stretcher = h.makeStretcher(cmap, minv, maxv);
+        return this.stretcher;
+      }
+    }
+
+    var patches = [];
+
+//===============================================================
+// utilities to chop up a pixelmap into rectangular zones
+//===============================================================
+
+    var isRowEmpty = function(irow, pxl, width) {
+      const w = 4 * width;
+      let p = irow * w;
+      for (let i = 0; i < width; i++) {
+        if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) return false;
+        p += 4;
+      }
+      return true;
+    }
+
+    var isColumnEmpty = function(icol, pxl, width, height) {
+      const w = 4 * width;
+      let p = 4 * icol;
+      for (let i = 0; i < height; i++) {
+        if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) return false;
+        p += w;
+      }
+      return true;
+    }
+
+    // rezone one rectangular canvas
+    var rezone = function(context) {
+      console.log('rezone called');
+
+      const imgData = context.getImageData(0, 0, context.canvas.width,
+                                                 context.canvas.height);
+      const pxl = imgData.data;
+
+      // divide image into xy zones
+      let ystart = [];
+      let ywidth = [];
+      for (let iy = 0; iy < context.canvas.height; iy++) {
+        if (isRowEmpty(iy, pxl, context.canvas.width)) {
+          if (ystart.length != ywidth.length) {
+            ywidth.push(iy - ystart[ystart.length-1]);
+          }
+        } else {
+          if (ystart.length == ywidth.length) ystart.push(iy);
+        }
+      }
+      if (ystart.length != ywidth.length) {
+        ywidth.push(context.canvas.height - ystart[ystart.length-1]);
+      }
+      let xstart = [];
+      let xwidth = [];
+      for (let ix = 0; ix < context.canvas.width; ix++) {
+        if (isColumnEmpty(ix, pxl, context.canvas.width,
+                                   context.canvas.height)) {
+          if (xstart.length != xwidth.length) {
+            xwidth.push(ix - xstart[xstart.length-1]);
+          }
+        } else {
+          if (xstart.length == xwidth.length) xstart.push(ix);
+        }
+      }
+      if (xstart.length != xwidth.length) {
+        xwidth.push(context.canvas.width - xstart[xstart.length-1]);
+      }
+      console.log('  xstart = ' + xstart);
+      console.log('  xwidth = ' + xwidth);
+      console.log('  ystart = ' + ystart);
+      console.log('  ywidth = ' + ywidth);
+
+      // make patch rectangles
+      let r = new Array();
+      for (let iy = 0; iy < ystart.length; iy++) {
+        for (let ix = 0; ix < xstart.length; ix++) {
+          p = new OpenSeadragon.Rect(xstart[ix], ystart[iy],
+                                     xwidth[ix], ywidth[iy], 0);
+          r.push(p);
+        }
+      }
+      return r;
+    }
+
+//===============================================================
+// main filter
+//===============================================================
+
+    // requires LSST patch on openseadragon-filtering.js
+    // in order to get tile-invalidated event data.
+    var accumulateFilter = function(context, ev) {
+      console.log("accumulateFilter:  w,h = " + context.canvas.width + "," +
+                                                context.canvas.height);
+
+      if (ev.tile.level == 0) {
+        simpleAutoScaleFilter(context);
+        return;
+      }
+
+      const rects = rezone(context);
+      console.log('number of rectangles = ' + rects.length);
+      for (let r of rects) {
+        console.log('  ' + r.toString());
+        const c = r.getCenter(); // in pixel coordinates
+        const bs = ev.tiledImage.getBounds(); // in viewport coordinates
+        const bt = ev.tile.bounds; // tile bounds, normalized to TiledImage
+        const cv = c.times(bs.width/(bt.width*context.canvas.width))
+                    .plus(bs.getTopLeft());
+        const rv = r.times(bs.width/(bt.width*context.canvas.width))
+                    .translate(bs.getTopLeft());
+        console.log('  center (pixels) = ' + c);
+        console.log('  tiled image bounds = ' + bs);
+        console.log('  tile bounds = ' + bt);
+        console.log('  center = ' + cv);
+        console.log('  rect bounds = ' + rv);
+        let s = null;
+        let patch = null;
+        for (let p of patches) {
+          let s = null;
+          if (p.containsPoint(c)) {
+            patch = p;
+            s = p.getStretcher();
+            break;
+          }
+        }
+        if (s == null) {
+          // create patch in viewport coordinates
+          patch = new Patch(rv.x, rv.y, rv.width, rv.height, rv.degrees);
+          patches.push(patch);
+        }
+        // find box in tile pixel coordinates
+        const b = patch.translate(bs.getTopLeft().negate())
+                       .times(bt.width*context.canvas.width/bs.width);
+        const box = new OpenSeadragon.Rect(Math.round(b.x), Math.round(b.y),
+                                           Math.round(b.width),
+                                           Math.round(b.height), b.degrees);
+        console.log('b = ' + b);
+        console.log('box = ' + box);
+        const idat = context.getImageData(box.x, box.y,
+                                          box.width, box.height);
+        if (s == null) {
+          const minv = parseInt(document.getElementById("minv").value);
+          const maxv = parseInt(document.getElementById("maxv").value);
+          s = patch.getStretcher(cmap, minv, maxv, idat.data,
+                                 ColorStretch.decoders.raw);
+        }
+        ColorStretch.filter.apply(idat.data, ColorStretch.decoders.raw, s);
+        context.putImageData(idat, box.x, box.y);
+      }
+    };
+
+    viewer.setFilterOptions({
+      filters: { processors: accumulateFilter },
+      loadMode: 'sync'
+    });
+
+//===============================================================
+// viewer and doc events
+//===============================================================
+
+    // pull-down menu to change colormap
+    var colorMapMenu = document.getElementById('cmap');
+    colorMapMenu.addEventListener('change', function() {
+      let v = colorMapMenu.value;
+      if (v == 'saoA') cmap = ColorStretch.colormaps.saoA;
+      else if (v == 'saoB') cmap = ColorStretch.colormaps.saoB;
+      else if (v == 'saoBB') cmap = ColorStretch.colormaps.saoBB;
+      else if (v == 'standard') cmap = ColorStretch.colormaps.standard;
+      else cmap = ColorStretch.colormaps.gray;
+
+      viewer.setFilterOptions({
+        filters: { processors: accumulateFilter },
+        loadMode: 'sync'
+      });
+    });
+
+    // redraw color histogram if change min/max parameters
+    var redrawColorbarHistogram = function() {
+      const cbminv = parseInt(document.getElementById("cbminv").value);
+      const cbmaxv = parseInt(document.getElementById("cbmaxv").value);
+      const ix = parseInt(document.getElementById("cbx").value);
+      const iy = parseInt(document.getElementById("cby").value);
+      if (ix >= 0 && ix < xstart.length && iy >= 0 && iy < ystart.length) {
+        drawColorbarHistogram(acchist[ix][iy].trim(cbminv, cbmaxv),
+                              lastStretch[ix][iy]);
+      } else {
+        clearColorbarHistogram();
+      }
+    }
+
+    cbMinEl.addEventListener('input', redrawColorbarHistogram);
+    cbMaxEl.addEventListener('input', redrawColorbarHistogram);
+    cbxEl.addEventListener('input', redrawColorbarHistogram);
+    cbyEl.addEventListener('input', redrawColorbarHistogram);
+
+    // button which causes re-evaluation of stretch,
+    // based on previously accumulated histograms.
+    // Selects level with largest average range.
+    // (Not sure if this is what we really want?)
+    restretchButton.addEventListener('click', function() {
+      for (p of patches) p.reset();
+      viewer.setFilterOptions({
+        filters: { processors: accumulateFilter },
+        loadMode: 'sync'
+      });
+    });
+
+    </script>
+    <noscript>
+      <p>OpenSeadragon not available unless JS enabled</p>
+    </noscript>
+</div>
+
+</body>
+</html>
