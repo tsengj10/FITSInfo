@@ -362,20 +362,29 @@
         const c = r.getCenter(); // in pixel coordinates
         const bs = ev.tiledImage.getBounds(); // in viewport coordinates
         const bt = ev.tile.bounds; // tile bounds, normalized to TiledImage
-        const cv = c.times(bs.width/(bt.width*context.canvas.width))
-                    .plus(bs.getTopLeft());
-        const rv = r.times(bs.width/(bt.width*context.canvas.width))
-                    .translate(bs.getTopLeft());
+        //const cv = c.times(bs.width/(bt.width*context.canvas.width))
+        //            .plus(bs.getTopLeft());
+        //const rv = r.times(bs.width/(bt.width*context.canvas.width))
+        //            .translate(bs.getTopLeft());
+        const cv = c.times(bt.width/context.canvas.width)
+                    .plus(bt.getTopLeft())
+                    .times(bs.width)
+                    .plus(bs.getTopLeft()); // center in viewport coordinates
+        const rv = r.times(bt.width/context.canvas.width)
+                    .translate(bt.getTopLeft())
+                    .times(bs.width)
+                    .translate(bs.getTopLeft()); // viewport coordinates
         console.log('  center (pixels) = ' + c);
-        console.log('  tiled image bounds = ' + bs);
-        console.log('  tile bounds = ' + bt);
-        console.log('  center = ' + cv);
-        console.log('  rect bounds = ' + rv);
+        console.log('  tiled image bounds (vp) = ' + bs);
+        console.log('  tile bounds (norm) = ' + bt);
+        console.log('  center (vp) = ' + cv);
+        console.log('  rect bounds (vp) = ' + rv);
         let s = null;
         let patch = null;
         for (let p of patches) {
           let s = null;
-          if (p.containsPoint(c)) {
+          if (p.containsPoint(cv)) {
+            console.log('reuse existing patch ' + p.toString());
             patch = p;
             s = p.getStretcher();
             break;
@@ -387,8 +396,12 @@
           patches.push(patch);
         }
         // find box in tile pixel coordinates
+        //const b = patch.translate(bs.getTopLeft().negate())
+        //               .times(bt.width*context.canvas.width/bs.width);
         const b = patch.translate(bs.getTopLeft().negate())
-                       .times(bt.width*context.canvas.width/bs.width);
+                       .times(1.0/bs.width)
+                       .translate(bt.getTopLeft().negate())
+                       .times(context.canvas.width/bt.width);
         const box = new OpenSeadragon.Rect(Math.round(b.x), Math.round(b.y),
                                            Math.round(b.width),
                                            Math.round(b.height), b.degrees);
