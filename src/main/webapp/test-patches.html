@@ -287,7 +287,7 @@
 
     // rezone one rectangular canvas
     var rezone = function(context) {
-      console.log('rezone called');
+      //console.log('rezone called');
 
       const imgData = context.getImageData(0, 0, context.canvas.width,
                                                  context.canvas.height);
@@ -323,10 +323,10 @@
       if (xstart.length != xwidth.length) {
         xwidth.push(context.canvas.width - xstart[xstart.length-1]);
       }
-      console.log('  xstart = ' + xstart);
-      console.log('  xwidth = ' + xwidth);
-      console.log('  ystart = ' + ystart);
-      console.log('  ywidth = ' + ywidth);
+      //console.log('  xstart = ' + xstart);
+      //console.log('  xwidth = ' + xwidth);
+      //console.log('  ystart = ' + ystart);
+      //console.log('  ywidth = ' + ywidth);
 
       // make patch rectangles
       let r = new Array();
@@ -347,8 +347,10 @@
     // requires LSST patch on openseadragon-filtering.js
     // in order to get tile-invalidated event data.
     var accumulateFilter = function(context, ev) {
+      const bs = ev.tiledImage.getBounds(); // in viewport coordinates
+      const bt = ev.tile.bounds; // tile bounds, normalized to TiledImage
       console.log("accumulateFilter:  w,h = " + context.canvas.width + "," +
-                                                context.canvas.height);
+                  context.canvas.height + " " + bs + ' (' + bt + ')');
 
       if (ev.tile.level == 0) {
         simpleAutoScaleFilter(context);
@@ -356,12 +358,10 @@
       }
 
       const rects = rezone(context);
-      console.log('number of rectangles = ' + rects.length);
+      //console.log('number of rectangles = ' + rects.length);
       for (let r of rects) {
-        console.log('  ' + r.toString());
+        //console.log('  ' + r.toString());
         const c = r.getCenter(); // in pixel coordinates
-        const bs = ev.tiledImage.getBounds(); // in viewport coordinates
-        const bt = ev.tile.bounds; // tile bounds, normalized to TiledImage
         //const cv = c.times(bs.width/(bt.width*context.canvas.width))
         //            .plus(bs.getTopLeft());
         //const rv = r.times(bs.width/(bt.width*context.canvas.width))
@@ -374,23 +374,27 @@
                     .translate(bt.getTopLeft())
                     .times(bs.width)
                     .translate(bs.getTopLeft()); // viewport coordinates
-        console.log('  center (pixels) = ' + c);
-        console.log('  tiled image bounds (vp) = ' + bs);
-        console.log('  tile bounds (norm) = ' + bt);
-        console.log('  center (vp) = ' + cv);
-        console.log('  rect bounds (vp) = ' + rv);
+        //console.log('  center (pixels) = ' + c);
+        //console.log('  tiled image bounds (vp) = ' + bs);
+        //console.log('  tile bounds (norm) = ' + bt);
+        //console.log('  center (vp) = ' + cv);
+        //console.log('  rect bounds (vp) = ' + rv);
         let s = null;
         let patch = null;
         for (let p of patches) {
-          let s = null;
-          if (p.containsPoint(cv)) {
-            console.log('reuse existing patch ' + p.toString());
-            patch = p;
-            s = p.getStretcher();
-            break;
+          const dx = cv.x - p.x;
+          if (dx >= 0.0 && dx <= p.width) {
+            const dy = cv.y - p.y;
+            if (dy >= 0.0 && dy <= p.height) {
+              patch = p;
+              s = p.getStretcher();
+              break;
+            }
           }
         }
+        let reuse = true;
         if (s == null) {
+          reuse = false;
           // create patch in viewport coordinates
           patch = new Patch(rv.x, rv.y, rv.width, rv.height, rv.degrees);
           patches.push(patch);
@@ -405,8 +409,10 @@
         const box = new OpenSeadragon.Rect(Math.round(b.x), Math.round(b.y),
                                            Math.round(b.width),
                                            Math.round(b.height), b.degrees);
-        console.log('b = ' + b);
-        console.log('box = ' + box);
+        //console.log('center ' + cv + ' cf patch ' + patch + ' ' + reuse);
+        //console.log(patch + '->' + box + ' ' + reuse);
+        //console.log('b = ' + b);
+        //console.log('box = ' + box);
         const idat = context.getImageData(box.x, box.y,
                                           box.width, box.height);
         if (s == null) {
@@ -428,6 +434,10 @@
 //===============================================================
 // viewer and doc events
 //===============================================================
+
+    viewer.addHandler('zoom', function(ev) {
+      console.log('zoom ' + ev.zoom);
+    });
 
     // pull-down menu to change colormap
     var colorMapMenu = document.getElementById('cmap');
