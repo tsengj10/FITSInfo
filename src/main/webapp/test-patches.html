@@ -49,16 +49,16 @@
 
 <p> Color histogram:<br>
 <div class="cbcontrol" style="float: left; width: 300px;">
-  <label for="cbx">Zone x:</label>
-  <input type="number" id="cbx" name="cbx" value=0>
-  <label for="cby">y:</label>
-  <input type="number" id="cby" name="cby" value=0>
-  <br>
   <label for="cbminv">Min:</label>
   <input type="number" id="cbminv" name="cbminv" value=0>
   <br>
   <label for="cbmaxv">Max:</label>
   <input type="number" id="cbmaxv" name="cbmaxv" value=-1>
+  <br>
+  <label for="patchid">Patch id:</label>
+  <input type="number" id="patchid" name="patchid" value=0>
+  <br>
+  <div class="patchdim" style="margin-top: 3em;"></div>
 </div>
 <canvas id="colorbar" width="700" height="250" style="border:1px solid grey"></canvas>
 </p>
@@ -76,8 +76,8 @@
 
     var cbMinEl = document.getElementById('cbminv');
     var cbMaxEl = document.getElementById('cbmaxv');
-    var cbxEl = document.getElementById('cbx');
-    var cbyEl = document.getElementById('cby');
+    var patchidEl = document.getElementById('patchid');
+    var patchdimEl = document.querySelectorAll('.cbcontrol .patchdim')[0];
     var restretchButton = document.getElementById('restretch');
 
     var updateZoom = function() {
@@ -357,6 +357,8 @@
         return;
       }
 
+      //console.log('  existing patches = ' + patches.length);
+
       const rects = rezone(context);
       //console.log('number of rectangles = ' + rects.length);
       for (let r of rects) {
@@ -379,7 +381,6 @@
         //console.log('  tile bounds (norm) = ' + bt);
         //console.log('  center (vp) = ' + cv);
         //console.log('  rect bounds (vp) = ' + rv);
-        let s = null;
         let patch = null;
         for (let p of patches) {
           const dx = cv.x - p.x;
@@ -387,18 +388,16 @@
             const dy = cv.y - p.y;
             if (dy >= 0.0 && dy <= p.height) {
               patch = p;
-              s = p.getStretcher();
               break;
             }
           }
         }
-        let reuse = true;
-        if (s == null) {
-          reuse = false;
+        if (patch == null) {
           // create patch in viewport coordinates
           patch = new Patch(rv.x, rv.y, rv.width, rv.height, rv.degrees);
           patches.push(patch);
         }
+        //console.log('center ' + cv + ' cf patch ' + patch + ' ' + (patch != null));
         // find box in tile pixel coordinates
         //const b = patch.translate(bs.getTopLeft().negate())
         //               .times(bt.width*context.canvas.width/bs.width);
@@ -409,12 +408,12 @@
         const box = new OpenSeadragon.Rect(Math.round(b.x), Math.round(b.y),
                                            Math.round(b.width),
                                            Math.round(b.height), b.degrees);
-        //console.log('center ' + cv + ' cf patch ' + patch + ' ' + reuse);
         //console.log(patch + '->' + box + ' ' + reuse);
         //console.log('b = ' + b);
         //console.log('box = ' + box);
         const idat = context.getImageData(box.x, box.y,
                                           box.width, box.height);
+        let s = patch.getStretcher();
         if (s == null) {
           const minv = parseInt(document.getElementById("minv").value);
           const maxv = parseInt(document.getElementById("maxv").value);
@@ -459,11 +458,12 @@
     var redrawColorbarHistogram = function() {
       const cbminv = parseInt(document.getElementById("cbminv").value);
       const cbmaxv = parseInt(document.getElementById("cbmaxv").value);
-      const ix = parseInt(document.getElementById("cbx").value);
-      const iy = parseInt(document.getElementById("cby").value);
-      if (ix >= 0 && ix < xstart.length && iy >= 0 && iy < ystart.length) {
-        drawColorbarHistogram(acchist[ix][iy].trim(cbminv, cbmaxv),
-                              lastStretch[ix][iy]);
+      const patchid = parseInt(document.getElementById("patchid").value);
+      let p = patches[patchid];
+      if (p) {
+        drawColorbarHistogram(p.hist.trim(cbminv, cbmaxv),
+                              p.getStretcher());
+        patchdimEl.innerHTML = 'Patch: ' + p;
       } else {
         clearColorbarHistogram();
       }
@@ -471,14 +471,14 @@
 
     cbMinEl.addEventListener('input', redrawColorbarHistogram);
     cbMaxEl.addEventListener('input', redrawColorbarHistogram);
-    cbxEl.addEventListener('input', redrawColorbarHistogram);
-    cbyEl.addEventListener('input', redrawColorbarHistogram);
+    patchidEl.addEventListener('input', redrawColorbarHistogram);
 
     // button which causes re-evaluation of stretch,
     // based on previously accumulated histograms.
     // Selects level with largest average range.
     // (Not sure if this is what we really want?)
     restretchButton.addEventListener('click', function() {
+      console.log('restretch ' + patches.length + ' patches');
       for (p of patches) p.reset();
       viewer.setFilterOptions({
         filters: { processors: accumulateFilter },
