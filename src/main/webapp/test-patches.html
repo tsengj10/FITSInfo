@@ -253,11 +253,8 @@
       const maxv = parseInt(document.getElementById("maxv").value);
 
       let applyPatch = function(patch, imgData) {
-        let s = patch.getStretcher();
-        if (s == null) {
-          s = patch.getStretcher(cmap, minv, maxv, imgData.data,
-                                 ColorStretch.decoders.raw);
-        }
+        const s = patch.getStretcher(cmap, minv, maxv, imgData.data,
+                                     ColorStretch.decoders.raw);
         ColorStretch.filter.apply(imgData.data, ColorStretch.decoders.raw, s);
       };
 
