@@ -166,6 +166,12 @@
         x: 0.0, y: 0.0, width: 0.4
       });
 */
+/*
+    viewer.addTiledImage({
+        tileSource: "http://localhost:8172/iiif/3/CC_O_20241211_000611_R22_S22$colorMap=null$source=data/info.json",
+        x: 0.0, y: 0.0, width: 0.4
+      });
+*/
 
 //===============================================================
 // colormap and colormap displays
@@ -224,121 +230,7 @@
 // keep track of this for each patch.
 //===============================================================
 
-    class Patch extends OpenSeadragon.Rect {
-      constructor(x, y, width, height, degrees) {
-        super(x, y, width, height, degrees);
-        const asize = (1 << 18);
-        this.bins = new Array(asize);
-        this.reset();
-      }
-      reset() {
-        for (let i = 0; i < this.bins.length; i++) this.bins[i] = 0;
-        this.hist = null;
-        this.stretcher = null;
-      }
-      hasStretcher() {
-        return (this.stretcher != null);
-      }
-      getStretcher(cmap, minv, maxv, imageData, decoder) {
-        if (this.stretcher) {
-          return this.stretcher;
-        }
-        if (!this.hist) {
-          if (imageData != null && decoder != null) {
-            this.hist = new ColorStretch.Histogram(this.bins, 0,
-                                                   this.bins.length);
-            ColorStretch.filter.fill(this.hist, imageData, decoder);
-          } else {
-            return null;
-          }
-        }
-        const h = this.hist.trim(1);
-        if (!h.valid()) return null;
-        this.stretcher = h.makeStretcher(cmap, minv, maxv);
-        return this.stretcher;
-      }
-    }
-
-    var patches = [];
-
-//===============================================================
-// utilities to chop up a pixelmap into rectangular zones
-//===============================================================
-
-    var isRowEmpty = function(irow, pxl, width) {
-      const w = 4 * width;
-      let p = irow * w;
-      for (let i = 0; i < width; i++) {
-        if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) return false;
-        p += 4;
-      }
-      return true;
-    }
-
-    var isColumnEmpty = function(icol, pxl, width, height) {
-      const w = 4 * width;
-      let p = 4 * icol;
-      for (let i = 0; i < height; i++) {
-        if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) return false;
-        p += w;
-      }
-      return true;
-    }
-
-    // rezone one rectangular canvas
-    var rezone = function(context) {
-      //console.log('rezone called');
-
-      const imgData = context.getImageData(0, 0, context.canvas.width,
-                                                 context.canvas.height);
-      const pxl = imgData.data;
-
-      // divide image into xy zones
-      let ystart = [];
-      let ywidth = [];
-      for (let iy = 0; iy < context.canvas.height; iy++) {
-        if (isRowEmpty(iy, pxl, context.canvas.width)) {
-          if (ystart.length != ywidth.length) {
-            ywidth.push(iy - ystart[ystart.length-1]);
-          }
-        } else {
-          if (ystart.length == ywidth.length) ystart.push(iy);
-        }
-      }
-      if (ystart.length != ywidth.length) {
-        ywidth.push(context.canvas.height - ystart[ystart.length-1]);
-      }
-      let xstart = [];
-      let xwidth = [];
-      for (let ix = 0; ix < context.canvas.width; ix++) {
-        if (isColumnEmpty(ix, pxl, context.canvas.width,
-                                   context.canvas.height)) {
-          if (xstart.length != xwidth.length) {
-            xwidth.push(ix - xstart[xstart.length-1]);
-          }
-        } else {
-          if (xstart.length == xwidth.length) xstart.push(ix);
-        }
-      }
-      if (xstart.length != xwidth.length) {
-        xwidth.push(context.canvas.width - xstart[xstart.length-1]);
-      }
-      //console.log('  xstart = ' + xstart);
-      //console.log('  xwidth = ' + xwidth);
-      //console.log('  ystart = ' + ystart);
-      //console.log('  ywidth = ' + ywidth);
-
-      // make patch rectangles
-      let r = new Array();
-      for (let iy = 0; iy < ystart.length; iy++) {
-        for (let ix = 0; ix < xstart.length; ix++) {
-          p = new OpenSeadragon.Rect(xstart[ix], ystart[iy],
-                                     xwidth[ix], ywidth[iy], 0);
-          r.push(p);
-        }
-      }
-      return r;
-    }
+    var quilt = new ColorStretch.Quilt();
 
 //===============================================================
 // main filter
@@ -357,72 +249,19 @@
         return;
       }
 
-      //console.log('  existing patches = ' + patches.length);
+      const minv = parseInt(document.getElementById("minv").value);
+      const maxv = parseInt(document.getElementById("maxv").value);
 
-      const rects = rezone(context);
-      //console.log('number of rectangles = ' + rects.length);
-      for (let r of rects) {
-        //console.log('  ' + r.toString());
-        const c = r.getCenter(); // in pixel coordinates
-        //const cv = c.times(bs.width/(bt.width*context.canvas.width))
-        //            .plus(bs.getTopLeft());
-        //const rv = r.times(bs.width/(bt.width*context.canvas.width))
-        //            .translate(bs.getTopLeft());
-        const cv = c.times(bt.width/context.canvas.width)
-                    .plus(bt.getTopLeft())
-                    .times(bs.width)
-                    .plus(bs.getTopLeft()); // center in viewport coordinates
-        const rv = r.times(bt.width/context.canvas.width)
-                    .translate(bt.getTopLeft())
-                    .times(bs.width)
-                    .translate(bs.getTopLeft()); // viewport coordinates
-        //console.log('  center (pixels) = ' + c);
-        //console.log('  tiled image bounds (vp) = ' + bs);
-        //console.log('  tile bounds (norm) = ' + bt);
-        //console.log('  center (vp) = ' + cv);
-        //console.log('  rect bounds (vp) = ' + rv);
-        let patch = null;
-        for (let p of patches) {
-          const dx = cv.x - p.x;
-          if (dx >= 0.0 && dx <= p.width) {
-            const dy = cv.y - p.y;
-            if (dy >= 0.0 && dy <= p.height) {
-              patch = p;
-              break;
-            }
-          }
-        }
-        if (patch == null) {
-          // create patch in viewport coordinates
-          patch = new Patch(rv.x, rv.y, rv.width, rv.height, rv.degrees);
-          patches.push(patch);
-        }
-        //console.log('center ' + cv + ' cf patch ' + patch + ' ' + (patch != null));
-        // find box in tile pixel coordinates
-        //const b = patch.translate(bs.getTopLeft().negate())
-        //               .times(bt.width*context.canvas.width/bs.width);
-        const b = patch.translate(bs.getTopLeft().negate())
-                       .times(1.0/bs.width)
-                       .translate(bt.getTopLeft().negate())
-                       .times(context.canvas.width/bt.width);
-        const box = new OpenSeadragon.Rect(Math.round(b.x), Math.round(b.y),
-                                           Math.round(b.width),
-                                           Math.round(b.height), b.degrees);
-        //console.log(patch + '->' + box + ' ' + reuse);
-        //console.log('b = ' + b);
-        //console.log('box = ' + box);
-        const idat = context.getImageData(box.x, box.y,
-                                          box.width, box.height);
+      let applyPatch = function(patch, imgData) {
         let s = patch.getStretcher();
         if (s == null) {
-          const minv = parseInt(document.getElementById("minv").value);
-          const maxv = parseInt(document.getElementById("maxv").value);
-          s = patch.getStretcher(cmap, minv, maxv, idat.data,
+          s = patch.getStretcher(cmap, minv, maxv, imgData.data,
                                  ColorStretch.decoders.raw);
         }
-        ColorStretch.filter.apply(idat.data, ColorStretch.decoders.raw, s);
-        context.putImageData(idat, box.x, box.y);
-      }
+        ColorStretch.filter.apply(imgData.data, ColorStretch.decoders.raw, s);
+      };
+
+      quilt.rezone(context, ev.tile, ev.tiledImage, applyPatch);
     };
 
     viewer.setFilterOptions({
@@ -459,7 +298,7 @@
       const cbminv = parseInt(document.getElementById("cbminv").value);
       const cbmaxv = parseInt(document.getElementById("cbmaxv").value);
       const patchid = parseInt(document.getElementById("patchid").value);
-      let p = patches[patchid];
+      let p = quilt.patches[patchid];
       if (p) {
         drawColorbarHistogram(p.hist.trim(cbminv, cbmaxv),
                               p.getStretcher());
@@ -478,8 +317,8 @@
     // Selects level with largest average range.
     // (Not sure if this is what we really want?)
     restretchButton.addEventListener('click', function() {
-      console.log('restretch ' + patches.length + ' patches');
-      for (p of patches) p.reset();
+      console.log('restretch');
+      quilt.reset();
       viewer.setFilterOptions({
         filters: { processors: accumulateFilter },
         loadMode: 'sync'

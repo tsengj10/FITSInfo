@@ -804,6 +804,193 @@ var ColorStretch = {};
   }
 
   //===============================================================
+  // patch - a rectangle which keeps a histogram and stretcher
+  //   x, y, width, height, degrees: similar to Rect,
+  //     but conventionally in viewport coordinates so
+  //     that one can test whether it contains points
+  //     located in viewport space.
+  //===============================================================
+
+  class Patch extends OpenSeadragon.Rect {
+
+    //-------------------------------------------------------------
+    // same constructor as Rect
+    //-------------------------------------------------------------
+    constructor(x, y, width, height, degrees) {
+      super(x, y, width, height, degrees);
+      const asize = (1 << 18);
+      this.bins = new Array(asize);
+      this.reset();
+    }
+
+    //-------------------------------------------------------------
+    // invalidate histogram and stretcher,
+    // but leave the geometry unchanged.
+    //-------------------------------------------------------------
+    reset() {
+      for (let i = 0; i < this.bins.length; i++) this.bins[i] = 0;
+      this.hist = null;
+      this.stretcher = null;
+    }
+
+    //-------------------------------------------------------------
+    // check whether the stretcher function exists
+    //-------------------------------------------------------------
+    hasStretcher() {
+      return (this.stretcher != null);
+    }
+
+    //-------------------------------------------------------------
+    // get the stretcher function.
+    // Return the previous one if it exists.
+    // Arguments are needed only if the stretcher
+    // needs to be recreated using new image data.
+    //-------------------------------------------------------------
+    getStretcher(cmap, minv, maxv, imageData, decoder) {
+      if (this.stretcher) {
+        return this.stretcher;
+      }
+      console.log('new stretcher');
+      if (!this.hist) {
+        if (imageData != null && decoder != null) {
+          this.hist = new ColorStretch.Histogram(this.bins, 0,
+                                                 this.bins.length);
+          ColorStretch.filter.fill(this.hist, imageData, decoder);
+        } else {
+          return null;
+        }
+      }
+      const h = this.hist.trim(1);
+      if (!h.valid()) return null;
+      this.stretcher = h.makeStretcher(cmap, minv, maxv);
+      return this.stretcher;
+    }
+  }
+
+  //===============================================================
+  // quilt geometry - a collection of rectangles
+  //===============================================================
+
+  $.Quilt = function() {
+    this.patches = []; // array of Patch objects
+  }
+
+  $.Quilt.prototype = {
+
+    reset: function() {
+      for (p of this.patches) p.reset();
+    },
+
+    // chop up pixelmap into patches
+    rezone: function(context, tile, tiledImage, apply) {
+      const width = context.canvas.width;
+      const height = context.canvas.height;
+      const imgData = context.getImageData(0, 0, width, height);
+      const pxl = imgData.data;
+
+      let isRowEmpty = function(irow) {
+        const w = 4 * width;
+        let p = irow * w;
+        for (let i = 0; i < width; i++) {
+          if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) return false;
+          p += 4;
+        }
+        return true;
+      };
+
+      let isColumnEmpty = function(icol) {
+        const w = 4 * width;
+        let p = 4 * icol;
+        for (let i = 0; i < height; i++) {
+          if (pxl[p] != 0 || pxl[p+1] != 0 || pxl[p+2] != 0) return false;
+          p += w;
+        }
+        return true;
+      };
+
+      // divide image into xy zones
+      let ystart = [];
+      let ywidth = [];
+      for (let iy = 0; iy < height; iy++) {
+        if (isRowEmpty(iy)) {
+          if (ystart.length != ywidth.length) {
+            ywidth.push(iy - ystart[ystart.length-1]);
+          }
+        } else {
+          if (ystart.length == ywidth.length) ystart.push(iy);
+        }
+      }
+      if (ystart.length != ywidth.length) {
+        ywidth.push(height - ystart[ystart.length-1]);
+      }
+      let xstart = [];
+      let xwidth = [];
+      for (let ix = 0; ix < width; ix++) {
+        if (isColumnEmpty(ix)) {
+          if (xstart.length != xwidth.length) {
+            xwidth.push(ix - xstart[xstart.length-1]);
+          }
+        } else {
+          if (xstart.length == xwidth.length) xstart.push(ix);
+        }
+      }
+      if (xstart.length != xwidth.length) {
+        xwidth.push(width - xstart[xstart.length-1]);
+      }
+
+      // convert to viewport coordinates if tile and tiledImage provided
+      let xv = new Array(xstart.length);
+      let xw = new Array(xwidth.length);
+      let yv = new Array(ystart.length);
+      let yw = new Array(ywidth.length);
+      if (tile && tiledImage) {
+        const bs = tiledImage.getBounds();//image bounds in viewport coordinates
+        const bt = tile.bounds; // tile bounds normalized to TiledImage
+        const bs0 = bs.getTopLeft();
+        const bt0 = bt.getTopLeft();
+        for (let i = 0; i < xstart.length; i++) {
+          xw[i] = xwidth[i] * bs.width * bt.width / width;
+          xv[i] = (xstart[i]*bt.width/width + bt0.x)*bs.width + bs0.x;
+        }
+        for (let i = 0; i < ystart.length; i++) {
+          yw[i] = ywidth[i] * bs.width * bt.width / width;
+          yv[i] = (ystart[i]*bt.width/width + bt0.y)*bs.width + bs0.y;
+        }
+      }
+      
+      // check if patches already exist
+      for (let iy = 0; iy < yv.length; iy++) {
+        const cy = yv[iy] + 0.5 * yw[iy];
+        for (let ix = 0; ix < xv.length; ix++) {
+          const cx = xv[ix] + 0.5 * xw[ix];
+          let patch = null;
+          for (let p of this.patches) {
+            const dx = cx - p.x;
+            if (dx >= 0.0 && dx <= p.width) {
+              const dy = cy - p.y;
+              if (dy >= 0.0 && dy <= p.height) {
+                patch = p;
+                break;
+              }
+            }
+          }
+          if (patch == null) {
+            patch = new Patch(xv[ix], yv[iy], xw[ix], yw[iy], 0);
+            this.patches.push(patch);
+          }
+
+          // get and apply stretcher (need extra arguments)
+          const idat = context.getImageData(xstart[ix], ystart[iy],
+                                            xwidth[ix], ywidth[iy]);
+          apply(patch, idat);
+          context.putImageData(idat, xstart[ix], ystart[iy]);
+        }
+      }
+    }
+
+  };
+
+  //===============================================================
   // filter utilities
   //===============================================================
   $.filter = {};
