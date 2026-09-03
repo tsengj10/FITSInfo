@@ -253,8 +253,8 @@
       const maxv = parseInt(document.getElementById("maxv").value);
 
       let applyPatch = function(patch, imgData) {
-        const s = patch.getStretcher(cmap, minv, maxv, imgData.data,
-                                     ColorStretch.decoders.raw);
+        const s = patch.getStretcher(ev.tile.level, cmap, minv, maxv,
+                                     imgData.data, ColorStretch.decoders.raw);
         ColorStretch.filter.apply(imgData.data, ColorStretch.decoders.raw, s);
       };
 
@@ -278,12 +278,15 @@
     var colorMapMenu = document.getElementById('cmap');
     colorMapMenu.addEventListener('change', function() {
       let v = colorMapMenu.value;
+      console.log('colormap change = ' + v);
       if (v == 'saoA') cmap = ColorStretch.colormaps.saoA;
       else if (v == 'saoB') cmap = ColorStretch.colormaps.saoB;
       else if (v == 'saoBB') cmap = ColorStretch.colormaps.saoBB;
       else if (v == 'standard') cmap = ColorStretch.colormaps.standard;
       else cmap = ColorStretch.colormaps.gray;
 
+      //quilt.resetStretchers();
+      quilt.reset();
       viewer.setFilterOptions({
         filters: { processors: accumulateFilter },
         loadMode: 'sync'
@@ -295,11 +298,13 @@
       const cbminv = parseInt(document.getElementById("cbminv").value);
       const cbmaxv = parseInt(document.getElementById("cbmaxv").value);
       const patchid = parseInt(document.getElementById("patchid").value);
-      let p = quilt.patches[patchid];
+      const p = quilt.patches[patchid];
       if (p) {
-        drawColorbarHistogram(p.hist.trim(cbminv, cbmaxv),
-                              p.getStretcher());
-        patchdimEl.innerHTML = 'Patch: ' + p;
+        const s = p.getStretcher();
+        if (s) {
+          drawColorbarHistogram(p.hist.trim(cbminv, cbmaxv), s);
+          patchdimEl.innerHTML = 'Patch: ' + p;
+        }
       } else {
         clearColorbarHistogram();
       }
@@ -309,10 +314,7 @@
     cbMaxEl.addEventListener('input', redrawColorbarHistogram);
     patchidEl.addEventListener('input', redrawColorbarHistogram);
 
-    // button which causes re-evaluation of stretch,
-    // based on previously accumulated histograms.
-    // Selects level with largest average range.
-    // (Not sure if this is what we really want?)
+    // button which causes re-evaluation of stretch
     restretchButton.addEventListener('click', function() {
       console.log('restretch');
       quilt.reset();

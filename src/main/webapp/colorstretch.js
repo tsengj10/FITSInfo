@@ -7,12 +7,15 @@
  * const context = document.getElementById("myCanvas").getContext("2d");
  * const imgData = context.getImageData(0, 0, context.canvas.width,
  *                                            context.canvas.height);
+ * const pxl = imgData.data;
  * // create histogram fro calculating auto-stretch
- * const hist = ColorStretch.filter.accumulate(imgData.data,
- *                                             ColorStretch.decoders.raw);
+ * const hist = ColorStretch.filter.accumulate(pxl, ColorStretch.decoders.raw);
  * // create a stretcher function to map pixel value to RGB
  * const stretch = hist.makeStretcher(ColorStretch.colormaps.saoA);
- * ColorStretch.filter.apply(imgData.data, 0, 0);
+ * // apply stretcher to pixel array
+ * ColorStretch.filter.apply(pxl, ColorStretch.decoders.raw, stretch);
+ * // put pixel array back into canvas
+ * context.putImage(imgData, 0, 0);
  *
  */
 
@@ -463,37 +466,36 @@ var ColorStretch = {};
     //-------------------------------------------------------------
     makeStretcher: function(colormap, xstart=0, xstop=-1) {
       const sh = this.trim(xstart, xstop); // trim zero bins off sides
-      let sum = 0;
-      let a = new Array(sh.nbins());
-      for (let i = 0; i < sh.nbins(); i++) {
-        sum += sh.data[i];
-        a[i] = sum;
-      }
-      const range = sum + 1; // compress cdf to range 0..1
-      this.rm = new Array(sh.nbins());
-      this.gm = new Array(sh.nbins());
-      this.bm = new Array(sh.nbins());
-      for (let i = 0; i < sh.nbins(); i++) {
-        let v = colormap(a[i] / range);
-        this.rm[i] = v[0];
-        this.gm[i] = v[1];
-        this.bm[i] = v[2];
-      }
-      return (function(cs, hist) {
+      console.log('makeStretcher xlo = ' + sh.xlo + ', xhi = ' + sh.xhi);
+      return (function(hist, cm) {
+        let sum = 0;
+        let a = new Array(hist.nbins());
+        for (let i = 0; i < hist.nbins(); i++) {
+          sum += hist.data[i];
+          a[i] = sum;
+        }
+        const range = sum + 1; // compress cdf to range 0..1
+        let rm = new Array(hist.nbins());
+        let gm = new Array(hist.nbins());
+        let bm = new Array(hist.nbins());
+        for (let i = 0; i < hist.nbins(); i++) {
+          let v = cm(a[i] / range);
+          rm[i] = v[0];
+          gm[i] = v[1];
+          bm[i] = v[2];
+        }
+        a = null; // dispose
         return function(v) {
           if (v < hist.xlo) {
-            cs.underflows += 1;
             return $.colormaps.underflow;
           }
           if (v >= hist.xhi) {
-            cs.overflows += 1;
             return $.colormaps.overflow;
           }
-          cs.valids += 1;
           const i = ((v - hist.xlo) / hist.dx()) | 0;
-          return [ cs.rm[i], cs.gm[i], cs.bm[i], 255 ];
+          return [ rm[i], gm[i], bm[i], 255 ];
         }
-      })(this, sh);
+      })(sh, colormap);
     },
 
     resetStretcher: function() {
@@ -831,6 +833,14 @@ var ColorStretch = {};
       for (let i = 0; i < this.bins.length; i++) this.bins[i] = 0;
       this.hist = null;
       this.stretcher = null;
+      this.level = 0;
+    }
+
+    //-------------------------------------------------------------
+    // reset just the stretcher, but leave histogram unchanged.
+    //-------------------------------------------------------------
+    resetStretcher() {
+      this.stretcher = null;
     }
 
     //-------------------------------------------------------------
@@ -846,16 +856,21 @@ var ColorStretch = {};
     // Arguments are needed only if the stretcher
     // needs to be recreated using new image data.
     //-------------------------------------------------------------
-    getStretcher(cmap, minv, maxv, imageData, decoder) {
+    getStretcher(level, cmap, minv, maxv, imageData, decoder) {
       if (this.stretcher) {
         return this.stretcher;
       }
-      console.log('new stretcher');
-      if (!this.hist) {
+      if (level == null) return null;
+      console.log('new stretcher level = ' + level);
+      if (!this.hist || level > this.level) {
+        this.level = level;
         if (imageData != null && decoder != null) {
           this.hist = new ColorStretch.Histogram(this.bins, 0,
                                                  this.bins.length);
           ColorStretch.filter.fill(this.hist, imageData, decoder);
+          console.log('new stretcher histogram, min = '
+                      + this.hist.getXMinFilled() + ', max = '
+                      + this.hist.getXMaxFilled());
         } else {
           return null;
         }
@@ -879,6 +894,10 @@ var ColorStretch = {};
 
     reset: function() {
       for (p of this.patches) p.reset();
+    },
+
+    resetStretchers: function() {
+      for (p of this.patches) p.resetStretcher();
     },
 
     // chop up pixelmap into patches
@@ -1002,14 +1021,19 @@ var ColorStretch = {};
   //   stretcher = function scalar pixel value -> rgba
   //---------------------------------------------------------------
   $.filter.apply = function(pxl, decoder, stretcher) {
+    let minv = (1 << 18);
+    let maxv = 0;
     for (let i = 0; i < pxl.length; i += 4) {
       let v = decoder(pxl[i], pxl[i+1], pxl[i+2], pxl[i+3]);
+      if (v > maxv) maxv = v;
+      if (v < minv) minv = v;
       let c = stretcher(v);
       pxl[i] = c[0];
       pxl[i+1] = c[1];
       pxl[i+2] = c[2];
       pxl[i+3] = c[3];
     }
+    console.log('applied min = ' + minv + ', max = ' + maxv);
   };
 
   //---------------------------------------------------------------
