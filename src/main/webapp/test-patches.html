@@ -253,7 +253,7 @@
       const maxv = parseInt(document.getElementById("maxv").value);
 
       let applyPatch = function(patch, imgData) {
-        const s = patch.getStretcher(ev.tile.level, cmap, minv, maxv,
+        const s = patch.getStretcher(cmap, minv, maxv,
                                      imgData.data, ColorStretch.decoders.raw);
         ColorStretch.filter.apply(imgData.data, ColorStretch.decoders.raw, s);
       };
@@ -272,6 +272,7 @@
 
     viewer.addHandler('zoom', function(ev) {
       console.log('zoom ' + ev.zoom);
+      quilt.restretch = false;
     });
 
     // pull-down menu to change colormap
@@ -318,6 +319,7 @@
     restretchButton.addEventListener('click', function() {
       console.log('restretch');
       quilt.reset();
+      quilt.restretch = true;
       viewer.setFilterOptions({
         filters: { processors: accumulateFilter },
         loadMode: 'sync'

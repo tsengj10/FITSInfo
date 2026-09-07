@@ -818,8 +818,9 @@ var ColorStretch = {};
     //-------------------------------------------------------------
     // same constructor as Rect
     //-------------------------------------------------------------
-    constructor(x, y, width, height, degrees) {
+    constructor(name, x, y, width, height, degrees) {
       super(x, y, width, height, degrees);
+      this.name = name;
       const asize = (1 << 18);
       this.bins = new Array(asize);
       this.reset();
@@ -833,7 +834,6 @@ var ColorStretch = {};
       for (let i = 0; i < this.bins.length; i++) this.bins[i] = 0;
       this.hist = null;
       this.stretcher = null;
-      this.level = 0;
     }
 
     //-------------------------------------------------------------
@@ -856,24 +856,19 @@ var ColorStretch = {};
     // Arguments are needed only if the stretcher
     // needs to be recreated using new image data.
     //-------------------------------------------------------------
-    getStretcher(level, cmap, minv, maxv, imageData, decoder) {
+    getStretcher(cmap, minv, maxv, imageData, decoder) {
       if (this.stretcher) {
         return this.stretcher;
       }
-      if (level == null) return null;
-      console.log('new stretcher level = ' + level);
-      if (!this.hist || level > this.level) {
-        this.level = level;
-        if (imageData != null && decoder != null) {
-          this.hist = new ColorStretch.Histogram(this.bins, 0,
-                                                 this.bins.length);
-          ColorStretch.filter.fill(this.hist, imageData, decoder);
-          console.log('new stretcher histogram, min = '
-                      + this.hist.getXMinFilled() + ', max = '
-                      + this.hist.getXMaxFilled());
-        } else {
-          return null;
-        }
+      if (imageData != null && decoder != null) {
+        this.hist = new ColorStretch.Histogram(this.bins, 0,
+                                               this.bins.length);
+        ColorStretch.filter.fill(this.hist, imageData, decoder);
+        console.log('[' + this.name + '] new stretcher histogram, min = '
+                    + this.hist.getXMinFilled() + ', max = '
+                    + this.hist.getXMaxFilled());
+      } else {
+        return null;
       }
       const h = this.hist.trim(1);
       if (!h.valid()) return null;
@@ -888,16 +883,23 @@ var ColorStretch = {};
 
   $.Quilt = function() {
     this.patches = []; // array of Patch objects
+    this.restretch = false; // restretch mode
+    this.xResolution = 0; // resolution from last rezone
+    this.yResolution = 0;
   }
 
   $.Quilt.prototype = {
 
     reset: function() {
       for (p of this.patches) p.reset();
+      this.xResolution = 0;
+      this.yResolution = 0;
     },
 
     resetStretchers: function() {
       for (p of this.patches) p.resetStretcher();
+      this.xResolution = 0;
+      this.yResolution = 0;
     },
 
     // chop up pixelmap into patches
@@ -958,22 +960,34 @@ var ColorStretch = {};
       }
 
       // convert to viewport coordinates if tile and tiledImage provided
+      if (!tile || !tiledImage) return;
+
       let xv = new Array(xstart.length);
       let xw = new Array(xwidth.length);
       let yv = new Array(ystart.length);
       let yw = new Array(ywidth.length);
-      if (tile && tiledImage) {
-        const bs = tiledImage.getBounds();//image bounds in viewport coordinates
-        const bt = tile.bounds; // tile bounds normalized to TiledImage
-        const bs0 = bs.getTopLeft();
-        const bt0 = bt.getTopLeft();
-        for (let i = 0; i < xstart.length; i++) {
-          xw[i] = xwidth[i] * bs.width * bt.width / width;
-          xv[i] = (xstart[i]*bt.width/width + bt0.x)*bs.width + bs0.x;
-        }
-        for (let i = 0; i < ystart.length; i++) {
-          yw[i] = ywidth[i] * bs.width * bt.width / width;
-          yv[i] = (ystart[i]*bt.width/width + bt0.y)*bs.width + bs0.y;
+      const bs = tiledImage.getBounds();//image bounds in viewport coordinates
+      const bt = tile.bounds; // tile bounds normalized to TiledImage
+      const bs0 = bs.getTopLeft();
+      const bt0 = bt.getTopLeft();
+      for (let i = 0; i < xstart.length; i++) {
+        xw[i] = xwidth[i] * bs.width * bt.width / width;
+        xv[i] = (xstart[i]*bt.width/width + bt0.x)*bs.width + bs0.x;
+      }
+      for (let i = 0; i < ystart.length; i++) {
+        yw[i] = ywidth[i] * bs.width * bt.width / width;
+        yv[i] = (ystart[i]*bt.width/width + bt0.y)*bs.width + bs0.y;
+      }
+      // if restretch, test new resolution vs old resolution
+      if (this.restretch) {
+        const rx = width / bt.width;
+        const ry = height / bt.height;
+        if (rx > this.xResolution || ry > this.yResolution) {
+          console.log('increased resolution ' + this.xResolution + ' -> ' +
+                      rx + ', ' + this.yResolution + ' -> ' + ry);
+          this.reset();
+          this.xResolution = rx;
+          this.yResolution = ry;
         }
       }
       
@@ -994,8 +1008,12 @@ var ColorStretch = {};
             }
           }
           if (patch == null) {
-            patch = new Patch(xv[ix], yv[iy], xw[ix], yw[iy], 0);
+            const nm = "" + this.patches.length;
+            patch = new Patch(nm, xv[ix], yv[iy], xw[ix], yw[iy], 0);
             this.patches.push(patch);
+            console.log('[' + patch.name + '] new patch ' + patch);
+          } else {
+            console.log('[' + patch.name + '] use existing ' + patch);
           }
 
           // get and apply stretcher (need extra arguments)
