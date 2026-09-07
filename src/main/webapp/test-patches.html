@@ -258,7 +258,8 @@
         ColorStretch.filter.apply(imgData.data, ColorStretch.decoders.raw, s);
       };
 
-      quilt.rezone(context, ev.tile, ev.tiledImage, applyPatch);
+      quilt.rezone(context, ev.tile, ev.tiledImage, applyPatch,
+                   ColorStretch.decoders.raw);
     };
 
     viewer.setFilterOptions({

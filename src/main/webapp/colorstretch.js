@@ -824,6 +824,8 @@ var ColorStretch = {};
       const asize = (1 << 18);
       this.bins = new Array(asize);
       this.reset();
+      this.minValue = (1 << 18); // just for record keeping
+      this.maxValue = 0;
     }
 
     //-------------------------------------------------------------
@@ -903,7 +905,7 @@ var ColorStretch = {};
     },
 
     // chop up pixelmap into patches
-    rezone: function(context, tile, tiledImage, apply) {
+    rezone: function(context, tile, tiledImage, apply, decoder) {
       const width = context.canvas.width;
       const height = context.canvas.height;
       const imgData = context.getImageData(0, 0, width, height);
@@ -992,6 +994,7 @@ var ColorStretch = {};
       }
       
       // check if patches already exist
+      const ps = new Array(yv.length * xv.length);
       for (let iy = 0; iy < yv.length; iy++) {
         const cy = yv[iy] + 0.5 * yw[iy];
         for (let ix = 0; ix < xv.length; ix++) {
@@ -1015,14 +1018,39 @@ var ColorStretch = {};
           } else {
             console.log('[' + patch.name + '] use existing ' + patch);
           }
+          ps[iy*xv.length + ix] = patch;
 
-          // get and apply stretcher (need extra arguments)
+          if (this.restretch) {
+            // check range of pixel values in the patch
+            const idat = context.getImageData(xstart[ix], ystart[iy],
+                                              xwidth[ix], ywidth[iy]);
+            const pxl = idat.data;
+            let minv = patch.minValue;
+            let maxv = patch.maxValue;
+            for (let i = 0; i < pxl.length; i += 4) {
+              let v = decoder(pxl[i], pxl[i+1], pxl[i+2], pxl[i+3]);
+              if (v < minv) minv = v;
+              if (v > maxv) maxv = v;
+            }
+            if (maxv - minv > patch.maxValue - patch.minValue) {
+              apply(patch, idat); // make a new stretcher
+              // (could be more efficient if select best, stretch once)
+            }
+          }
+        }
+      }
+
+      // apply widest-ranged stretchers to all the patches
+      for (let iy = 0; iy < yv.length; iy++) {
+        for (let ix = 0; ix < xv.length; ix++) {
+          const patch = ps[iy*xv.length + ix];
           const idat = context.getImageData(xstart[ix], ystart[iy],
                                             xwidth[ix], ywidth[iy]);
           apply(patch, idat);
           context.putImageData(idat, xstart[ix], ystart[iy]);
         }
       }
+
     }
 
   };
